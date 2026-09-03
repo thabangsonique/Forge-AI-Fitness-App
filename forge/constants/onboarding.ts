@@ -24,6 +24,19 @@ if (isMobile) {
     .catch(() => {});
 }
 
+//function to save user answers inside the async storage.
+export const saveOnboardingAnswers = (
+  field: keyof OnboardingValues,
+  value: any,
+) => {
+  answers[field] = value;
+  if (isMobile) {
+    AsyncStorage.setItem(ONBOARDING_KEYS, JSON.stringify(answers)).catch(
+      () => {},
+    );
+  }
+};
+
 //check the onboarding answers against the schema,
 export const getOnboardingAnswers = () => {
   return onboardingValuesSchema.safeParse(answers);

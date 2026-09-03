@@ -15,18 +15,18 @@ const bgImg = require("../../assets/images/app-images/welcome-img.png");
 const mockup = require("../../assets/images/app-images/mockup.png");
 const logo = require("../../assets/images/app-images/logo-full(2).png");
 
-useFocusEffect(
-  useCallback(() => {
-    const entry = StatusBar.pushStackEntry({
-      backgroundColor: "#DFFF00",
-      barStyle: "light-content",
-      translucent: false,
-    });
-
-    return () => StatusBar.popStackEntry(entry);
-  }, []),
-);
 export default function welcome() {
+  useFocusEffect(
+    useCallback(() => {
+      const entry = StatusBar.pushStackEntry({
+        backgroundColor: "#DFFF00",
+        barStyle: "light-content",
+        translucent: false,
+      });
+
+      return () => StatusBar.popStackEntry(entry);
+    }, []),
+  );
   return (
     <ImageBackground source={bgImg} className="flex-1" resizeMode="cover">
       {/* overlay layer */}
@@ -58,6 +58,7 @@ export default function welcome() {
               pathname: "/onboarding/[step]",
               params: { step: "gender" },
             }}
+            asChild
           >
             <Pressable
               style={({ pressed }) => ({

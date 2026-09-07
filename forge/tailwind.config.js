@@ -11,6 +11,7 @@ module.exports = {
         primary: "#DFFF00",
         muted: "#E3E4DC",
         "muted-2": "#C7C8BF",
+        "muted-3": "#a0a0a0",
       },
     },
   },

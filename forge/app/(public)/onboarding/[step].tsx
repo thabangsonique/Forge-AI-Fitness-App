@@ -9,6 +9,9 @@ import {
 } from "@/constants/onboarding";
 import { Feather } from "@expo/vector-icons";
 import SafeAreaScreen from "@/components/ui/safe-area-screen";
+import GenderStep from "@/components/onboarding/gender";
+import GoalStep from "@/components/onboarding/goal";
+import ExperienceStep from "@/components/onboarding/experience";
 
 export default function OnboardingStep() {
   //grab the current step we are at.
@@ -34,7 +37,7 @@ export default function OnboardingStep() {
   };
 
   //when user selects an answer
-  const select = (value: OnboardingValues[typeof step.field]) => {
+  const onselect = (value: OnboardingValues[typeof step.field]) => {
     const nextValues = { ...values, [step.field]: value };
     saveOnboardingAnswers(step.field, value);
     setValues(nextValues);
@@ -73,12 +76,23 @@ export default function OnboardingStep() {
               style={{ width: `${((index + 1) / steps.length) * 100}%` }}
             ></View>
           </View>
-
-          {/* render step pages accordingly */}
-          {step.key === "gender" && <></>}
-          {step.key === "goal" && <></>}
-          {step.key === "experience" && <></>}
         </View>
+        {/* render step pages accordingly */}
+        {step.key === "gender" && (
+          <>
+            <GenderStep onSelect={onselect} value={values.gender} />
+          </>
+        )}
+        {step.key === "goal" && (
+          <>
+            <GoalStep onSelect={onselect} value={values.goal} />
+          </>
+        )}
+        {step.key === "experience" && (
+          <>
+            <ExperienceStep onSelect={onselect} value={values.experience} />
+          </>
+        )}
         {/* cta button -next/ continue to sign up*/}
         <View className="flex-1 justify-end">
           <Pressable

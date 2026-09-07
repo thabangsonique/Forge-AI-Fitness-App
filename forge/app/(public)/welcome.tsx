@@ -9,13 +9,14 @@ import {
 import React, { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Link, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 
 const bgImg = require("../../assets/images/app-images/welcome-img.png");
 const mockup = require("../../assets/images/app-images/mockup.png");
 const logo = require("../../assets/images/app-images/logo-full(2).png");
 
 export default function welcome() {
+  const router = useRouter();
   useFocusEffect(
     useCallback(() => {
       const entry = StatusBar.pushStackEntry({
@@ -53,24 +54,32 @@ export default function welcome() {
           </Text>
 
           {/* buttons */}
-          <Link
+          {/* <Link
             href={{
               pathname: "/onboarding/[step]",
               params: { step: "gender" },
             }}
             asChild
+          > */}
+          <Pressable
+            onPress={() => {
+              console.log("BUTTON PRESSED");
+
+              router.push({
+                pathname: "/onboarding/[step]",
+                params: { step: "gender" },
+              });
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.5 : 1,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            })}
+            className="bg-primary mt-10 flex-row justify-center items-center rounded-full py-3 w-full "
           >
-            <Pressable
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.5 : 1,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              })}
-              className="bg-primary mt-10 flex-row justify-center items-center rounded-full py-3 w-full "
-            >
-              <Text className="text-lg">Get Started</Text>
-              <Ionicons name="arrow-forward" />
-            </Pressable>
-          </Link>
+            <Text className="text-lg">Get Started</Text>
+            <Ionicons name="arrow-forward" />
+          </Pressable>
+          {/* </Link> */}
           <Pressable
             style={({ pressed }) => ({
               opacity: pressed ? 0.5 : 1,

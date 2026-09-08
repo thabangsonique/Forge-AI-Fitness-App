@@ -1,9 +1,25 @@
+import "dotenv/config"
 import express from "express";
-import dotenv from "dotenv";
+import cors from "cors"
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./lib/auth";
 
-dotenv.config();
+
 
 const app = express();
+
+
+//allows mobile app to send login credentials
+app.use(cors({
+  origin: [
+    "http://localhost:8081", "exp://", "forge://"
+  ], credentials: true,
+}))
+
+//direct all auth routes to better auth.
+app.all("/api/auth/*splat", toNodeHandler(auth))
+
+app.use(express.json())
 
 //MIDDLEWARE
 

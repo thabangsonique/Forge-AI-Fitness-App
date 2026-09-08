@@ -39,10 +39,10 @@ export default function ExperienceStep({
     <View className="mt-5 flex-1">
       <Animated.View entering={FadeInRight.duration(250)}>
         <Text className="font-bold text-white text-xl text-center">
-          What's your gender?
+          What's your training experience?
         </Text>
         <Text className="text-muted/40 text-center">
-          This helps us personalize your experience
+         Select your current experience level.
         </Text>
       </Animated.View>
 

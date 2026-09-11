@@ -1,15 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback } from "react";
 import {
-  View,
-  Text,
-  ImageBackground,
   Image,
+  ImageBackground,
   Pressable,
   StatusBar,
+  Text,
+  View,
 } from "react-native";
-import React, { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useFocusEffect } from "expo-router";
 
 const bgImg = require("../../assets/images/app-images/welcome-img.png");
 const mockup = require("../../assets/images/app-images/mockup.png");
@@ -26,15 +26,18 @@ export default function welcome() {
       });
 
       return () => StatusBar.popStackEntry(entry);
-    }, []),
+    }, [])
   );
+
+  //sign in.
+
   return (
     <ImageBackground source={bgImg} className="flex-1" resizeMode="cover">
       {/* overlay layer */}
       <View className="absolute inset-0 bg-black/50" />
       <SafeAreaView className="flex-1 justify-between px-6">
         {/* logo section */}
-        <View className="items-center mt-56">
+        <View className="mt-56 items-center">
           <Image source={logo} className="size-60" resizeMode="contain" />
 
           {/* slogan text */}
@@ -46,7 +49,7 @@ export default function welcome() {
 
           {/* description */}
           <Text
-            className="text-muted-2 text-center mt-14"
+            className="mt-14 text-center text-muted-2"
             style={{ lineHeight: 20 }}
           >
             Your personalized fitness journey starts here. Precision training
@@ -74,18 +77,20 @@ export default function welcome() {
               opacity: pressed ? 0.5 : 1,
               transform: [{ scale: pressed ? 0.97 : 1 }],
             })}
-            className="bg-primary mt-10 flex-row justify-center items-center rounded-full py-3 w-full "
+            className="mt-10 w-full flex-row items-center justify-center rounded-full bg-primary py-3 "
           >
             <Text className="text-lg">Get Started</Text>
             <Ionicons name="arrow-forward" />
           </Pressable>
           {/* </Link> */}
+
           <Pressable
+            onPress={() => router.push("/sign-in")}
             style={({ pressed }) => ({
               opacity: pressed ? 0.5 : 1,
               transform: [{ scale: pressed ? 0.97 : 1 }],
             })}
-            className="border border-primary mt-5 flex-row justify-center items-center rounded-full py-3 w-full "
+            className="mt-5 w-full flex-row items-center justify-center rounded-full border border-primary py-3 "
           >
             <Text className="text-lg text-white">Log In</Text>
           </Pressable>

@@ -6,6 +6,8 @@ import express from "express";
 import { db } from "./db";
 import { profiles } from "./db/schema";
 import { auth } from "./lib/auth";
+import exercisesRoutes from "./routes/exercisesRoutes";
+import statsRoutes from "./routes/statsRoutes";
 import workoutSessionRoutes from "./routes/workoutSessionsRoutes";
 import workoutsRoutes from "./routes/workoutsRoutes";
 
@@ -48,6 +50,8 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 // ROUTES.
 app.use("/api/workouts", workoutsRoutes);
 app.use("/api/workouts", workoutSessionRoutes);
+app.use("/api/performance", statsRoutes);
+app.use("/api", exercisesRoutes);
 
 //STAND ALONE.
 //profile routes.

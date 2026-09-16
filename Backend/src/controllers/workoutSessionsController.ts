@@ -110,7 +110,9 @@ export const getWorkoutSessionHistory = async (req: Request, res: Response) => {
     });
 
     if (userSessions.length === 0) {
-      return res.status(404).json({ success: true, workoutSession: [] });
+      return res
+        .status(404)
+        .json({ success: true, workoutSession: "No sessions recorded yet." });
     }
 
     //grab only the session ids.
@@ -151,7 +153,7 @@ export const getWorkoutSessionHistory = async (req: Request, res: Response) => {
 };
 
 //CREATE A WORKOUT SESSION.
-export const creatWorkoutSession = async (req: Request, res: Response) => {
+export const createWorkoutSession = async (req: Request, res: Response) => {
   try {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),

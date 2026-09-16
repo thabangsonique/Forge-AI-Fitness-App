@@ -1,7 +1,7 @@
-import { View, Text, Pressable } from "react-native";
-import { Tabs } from "expo-router";
 import { Feather, Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 import React from "react";
+import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
@@ -16,7 +16,7 @@ export default function TabLayout() {
           bottom: insets.bottom + 8,
           height: 65,
           paddingBottom: 30,
-          backgroundColor: "#0B0C0A",
+          backgroundColor: "#151515ff",
           marginHorizontal: 16,
           borderRadius: 32,
           elevation: 8,
@@ -24,6 +24,7 @@ export default function TabLayout() {
           shadowRadius: 30,
           shadowOpacity: 1,
           shadowColor: "#000",
+          borderTopColor: "transparent",
         },
       }}
     >
@@ -54,7 +55,7 @@ export default function TabLayout() {
               className="flex-1 items-center justify-center"
               onPress={onPress}
             >
-              <View className="bg-primary rounded-full h-14 w-14 items-center justify-center shadow-lg">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-primary shadow-lg">
                 <Feather name="plus" size={24} />
               </View>
             </Pressable>

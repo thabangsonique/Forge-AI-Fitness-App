@@ -6,7 +6,7 @@ import {
 
 const router = Router();
 
-router.get("/exercises/:id", getExerciseById);
-router.get("/exercises", getExercises);
+router.get("/exercises/:id", getExerciseById); // -TESTED WORKING
+router.get("/exercises", getExercises); //- TESTED WORKING
 
 export default router;

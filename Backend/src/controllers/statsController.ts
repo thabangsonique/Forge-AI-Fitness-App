@@ -31,17 +31,32 @@ export const getUserStats = async (req: Request, res: Response) => {
     //all data to be returned in these fields.
     const [
       totalWorkout,
+      exerciseBreakedown,
       completedSession,
       recentActivity,
       peformanceMatrics,
       userProfile,
     ] = await Promise.all([
       calculateTotalWorkouts(userId),
+      calculatedExerciseBreakdown(userId),
       calculateCompletedSessions(userId),
       getRecentAcivity(userId),
       calculatePerformanceMetrics(userId),
       getUserProfile(userId),
     ]);
+
+    const stats = {
+      overview: {
+        totalWorkout,
+        completedSession,
+        userProfile: userProfile,
+      },
+      exerciseBreakedown,
+      recentActivity,
+      peformanceMatrics,
+    };
+
+    return res.status(200).json({ success: true, stats });
   } catch (error: any) {
     console.error("Error fetching stats", error);
     return res.status(500).json({ error: error.message });
@@ -65,7 +80,7 @@ const calculateCompletedSessions = async (userId: string) => {
   const result = await db
     .select({
       count: count(),
-      totalDuration: sql<number>`sum ${workoutSession.durationSeconds}`,
+      totalDuration: sql<number>`sum( ${workoutSession.durationSeconds})`,
     })
     .from(workoutSession)
     .where(eq(workoutSession.userId, userId));

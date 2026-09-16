@@ -8,7 +8,7 @@ module.exports = {
       colors: {
         background: "#0B0C0A",
         "card-background": "#121410",
-        primary: "#DFFF00",
+        primary: "#dae86aff",
         muted: "#E3E4DC",
         "muted-2": "#C7C8BF",
         "muted-3": "#a0a0a0",

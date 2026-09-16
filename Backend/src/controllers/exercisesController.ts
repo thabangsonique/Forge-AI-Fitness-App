@@ -21,9 +21,7 @@ export const getExercises = async (req: Request, res: Response) => {
     }
 
     //fetch all exercises.
-    const allExercises = await db.query.exercises.findMany({
-      where: eq(exercises.userId, session.user.id),
-    });
+    const allExercises = await db.query.exercises.findMany();
 
     return res.status(200).json({ success: true, allExercises });
   } catch (error: any) {

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {} from "../controllers/workoutsController";
 import {
-  creatWorkoutSession,
+  createWorkoutSession,
   getSessionDates,
   getWorkoutSessionById,
   getWorkoutSessionHistory,
@@ -9,9 +9,9 @@ import {
 
 const router = Router();
 
-router.get("/session/:id", getWorkoutSessionById);
-router.get("/session-dates", getSessionDates);
-router.get("/session-history", getWorkoutSessionHistory);
-router.post("/session", creatWorkoutSession);
+router.get("/session/:id", getWorkoutSessionById); //-TESTED WORKOING
+router.get("/session-dates", getSessionDates); //-TESTED WORKING
+router.get("/session-history", getWorkoutSessionHistory); //- TESTED WORKING
+router.post("/session", createWorkoutSession); //-TESTED WORKING.
 
 export default router;

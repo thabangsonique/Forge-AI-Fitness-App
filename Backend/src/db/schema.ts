@@ -106,6 +106,19 @@ export const workouts = pgTable("workouts", {
     .$onUpdate(() => new Date()),
 });
 
+//user's ability to schedule workouts.
+export const scheduledWorkouts = pgTable("scheduled_workouts", {
+  id: uuid().notNull().primaryKey().defaultRandom(),
+  userId: text()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  workoutId: uuid()
+    .notNull()
+    .references(() => workouts.id),
+  scheduledDate: timestamp({ withTimezone: true }).notNull(),
+  createdAt: timestamp({ withTimezone: true }).notNull(),
+});
+
 //all exercises the user will choose from.
 export const exercises = pgTable("exercises", {
   id: uuid().notNull().defaultRandom().primaryKey(),

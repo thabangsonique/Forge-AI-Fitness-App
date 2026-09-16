@@ -5,6 +5,6 @@ import { getUserStats } from "../controllers/statsController";
 
 const router = Router();
 
-router.get("/stats", getUserStats);
+router.get("/stats", getUserStats); //-TESTED WORKING
 
 export default router;

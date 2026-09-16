@@ -9,7 +9,7 @@ import {
 } from "@/lib/validations/auth-validation";
 import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -339,6 +339,13 @@ export default function SignUp() {
               </>
             )}
           </Pressable>
+
+          <Link href={"/(public)/sign-in"} className="mt-5 gap-2 text-center">
+            <Text className=" text-white">
+              Already have an account?{" "}
+              <Text className="text-primary">Sign In</Text>
+            </Text>
+          </Link>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

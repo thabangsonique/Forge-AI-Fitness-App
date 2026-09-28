@@ -2,14 +2,20 @@
 //2. user fetch workout by id(GET) - DONE
 //3.user fetch all created workouts. - DONE
 import { fromNodeHeaders } from "better-auth/node";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { Request, Response } from "express";
 import { db } from "../db";
-import { scheduledWorkouts, workouts } from "../db/schema";
+import {
+  exercises,
+  scheduledWorkouts,
+  workoutExercises,
+  workouts,
+} from "../db/schema";
 import { auth } from "../lib/auth";
 
-//CREATING A WORKOUT
+//workouts grouping helper function.
 
+//CREATING A WORKOUT
 export const createWorkout = async (req: Request, res: Response) => {
   try {
     //verify if user is authenticated for the request.
@@ -22,7 +28,7 @@ export const createWorkout = async (req: Request, res: Response) => {
     }
 
     //if token found. grab data from the body.
-    const { name, description, scheduledDate } = req.body;
+    const { name, description, category, exercises, scheduledDate } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: "Name is required" });
@@ -35,9 +41,25 @@ export const createWorkout = async (req: Request, res: Response) => {
         name,
         description: description || null,
         userId: session.user.id,
+        category: category || null,
         isTemplate: false,
       })
       .returning();
+
+    if (exercises && exercises.length > 0 && Array.isArray(exercises)) {
+      const addedExercises = exercises.map((ex: any, index) => ({
+        userId: session.user.id,
+        workoutId: newWorkout.id,
+        exerciseId: ex.exerciseId,
+        restSeconds: ex.restSeconds,
+        sets: ex.sets,
+        reps: ex.reps,
+        position: index,
+      }));
+
+      //add the exercises.
+      await db.insert(workoutExercises).values(addedExercises);
+    }
 
     if (scheduledDate) {
       const date = new Date(scheduledDate);
@@ -107,12 +129,115 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
     }
 
     //fetch all the workouts.
-    const allWorkouts = await db.query.workouts.findMany({
-      where: eq(workouts.userId, session.user.id),
-      orderBy: (workouts, { desc }) => [desc(workouts.createdAt)],
-    });
+    const allWorkouts = await db
+      .select({
+        // ----------------------------
+        // Workout information
+        // ----------------------------
 
-    return res.status(200).json({ success: true, allWorkouts });
+        workoutId: workouts.id,
+        workoutName: workouts.name,
+        workoutDescription: workouts.description,
+
+        // ----------------------------
+        // Exercise information
+        // ----------------------------
+
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+        exerciseDescription: exercises.description,
+        muscle: exercises.muscle,
+        equipment: exercises.equipment,
+        difficulty: exercises.difficulty,
+        forceType: exercises.forceType,
+        mechanics: exercises.mechanics,
+        category: exercises.category,
+
+        // ----------------------------
+        // Workout-exercise information
+        // ----------------------------
+
+        workoutExerciseId: workoutExercises.id,
+        position: workoutExercises.position,
+        sets: workoutExercises.sets,
+        reps: workoutExercises.reps,
+        restSeconds: workoutExercises.restSeconds,
+      })
+      .from(workouts)
+      .leftJoin(workoutExercises, eq(workouts.id, workoutExercises.workoutId))
+      .leftJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+      .where(eq(workouts.userId, session.user.id));
+
+    const groupedWorkouts = allWorkouts.reduce(
+      (acc, row) => {
+        // --------------------------------------------------------
+        // If this workout doesn't exist in the accumulator yet,
+        // create it.
+        // --------------------------------------------------------
+
+        if (!acc[row.workoutId]) {
+          acc[row.workoutId] = {
+            id: row.workoutId,
+            name: row.workoutName,
+            description: row.workoutDescription,
+
+            exercises: [],
+
+            exerciseCount: 0,
+            totalSets: 0,
+          };
+        }
+
+        // --------------------------------------------------------
+        // Add the current exercise to this workout
+        // --------------------------------------------------------
+
+        if (row.exerciseId) {
+          acc[row.workoutId].exercises.push({
+            id: row.exerciseId,
+            workoutExerciseId: row.workoutExerciseId,
+
+            name: row.exerciseName,
+            description: row.exerciseDescription,
+            muscle: row.muscle,
+            equipment: row.equipment,
+            difficulty: row.difficulty,
+            forceType: row.forceType,
+            mechanics: row.mechanics,
+            category: row.category,
+
+            position: row.position,
+            sets: row.sets,
+            reps: row.reps,
+            restSeconds: row.restSeconds,
+          });
+
+          // ------------------------------------------------------
+          // Increase number of exercises
+          // ------------------------------------------------------
+
+          acc[row.workoutId].exerciseCount += 1;
+
+          // ------------------------------------------------------
+          // Add this exercise's sets to the workout's total sets
+          // ------------------------------------------------------
+
+          acc[row.workoutId].totalSets += row.sets ?? 0;
+        }
+
+        // Give the accumulator back to reduce()
+        return acc;
+      },
+
+      // Initial accumulator
+      {} as Record<string, any>
+    );
+
+    const formattedWorkouts = Object.values(groupedWorkouts);
+
+    return res
+      .status(200)
+      .json({ success: true, allWorkouts: formattedWorkouts });
   } catch (error: any) {
     console.error("Server failed to fetch ALL workouts", error);
 
@@ -164,6 +289,101 @@ export const getScheduledWorkouts = async (req: Request, res: Response) => {
     return res.status(200).json({ success: true, scheduledWorkouts: formated });
   } catch (error: any) {
     console.error("Server failed to fetch scheduled workouts", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getWorkoutsBySearch = async (req: Request, res: Response) => {
+  try {
+    const session = await auth.api.getSession();
+
+    if (!session || !session.user) {
+      return res.status(401).json({ error: "Unauthorized-no token found" });
+    }
+
+    //grab saerch name.
+    const { name } = req.query;
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "Search name is required" });
+    }
+
+    //convert name to lowercase.
+    const searchTerm = name.trim().toLowerCase();
+
+    const searchResults = await db
+      .select({
+        workoutId: workouts.id,
+        workoutName: workouts.name,
+        workoutDescription: workouts.description,
+
+        position: workoutExercises.position,
+        rest: workoutExercises.restSeconds,
+        sets: workoutExercises.sets,
+        reps: workoutExercises.reps,
+
+        exerciseId: exercises.id,
+        exerciseName: exercises.name,
+        exerciseDescription: exercises.description,
+        muscle: exercises.muscle,
+        equipment: exercises.equipment,
+        difficulty: exercises.difficulty,
+        mechanics: exercises.mechanics,
+        category: exercises.category,
+      })
+      .from(workouts)
+      .innerJoin(workoutExercises, eq(workouts.id, workoutExercises.workoutId))
+      .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
+      .where(
+        and(
+          eq(workouts.userId, session.user.id),
+          sql`${workouts.name} ILIKE ${`%${searchTerm}%`}`
+        )
+      )
+      .orderBy(asc(workouts.name), asc(workoutExercises.position));
+
+    //group workouts, sets & exercises.
+    const groupedWorkouts = searchResults.reduce(
+      (acc, row) => {
+        if (!acc[row.workoutId]) {
+          //create the workout object.
+          acc[row.workoutId] = {
+            id: row.workoutId,
+            name: row.workoutName,
+            description: row.workoutDescription,
+            exercises: [],
+            exerciseCount: 0,
+            totalSets: 0,
+          };
+        }
+
+        //add exercises Record if workout already exists.
+        acc[row.workoutId].exercises.push({
+          id: row.exerciseId,
+          name: row.exerciseName,
+          description: row.exerciseDescription,
+          muscle: row.muscle,
+          equipment: row.equipment,
+          difficulty: row.difficulty,
+          mechanics: row.mechanics,
+          category: row.category,
+        });
+
+        acc[row.workoutId].exerciseCount += 1;
+        acc[row.workoutId].totalSets += row.sets;
+
+        return acc;
+      },
+      {} as Record<string, any>
+    );
+
+    const formattedWorkouts = Object.values(groupedWorkouts);
+
+    return res
+      .status(200)
+      .json({ success: true, searchResults: formattedWorkouts });
+  } catch (error: any) {
+    console.error("Error searching workouts:", error);
     return res.status(500).json({ error: error.message });
   }
 };

@@ -4,11 +4,11 @@
 //4.(POST) post request to save the workoutsession that the user had. -DONE
 //5. (streak-GET) user fetch dates for previous workout session. -DONE
 import { fromNodeHeaders } from "better-auth/node";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { Request, Response } from "express";
 import { db } from "../db";
 
-import { workoutSession, workoutSessionSets } from "../db/schema";
+import { workoutSession, workoutSessionSets, workouts } from "../db/schema";
 import { auth } from "../lib/auth";
 
 //FETCH WORKOUT SESSION BY ID.
@@ -104,15 +104,24 @@ export const getWorkoutSessionHistory = async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Unauthorized - no token found." });
     }
 
-    const userSessions = await db.query.workoutSession.findMany({
-      where: eq(workoutSession.userId, session.user.id),
-      orderBy: (workoutSession, { desc }) => [desc(workoutSession.completedAt)],
-    });
+    const userSessions = await db
+      .select({
+        id: workoutSession.id,
+        userId: workoutSession.userId,
+        workoutId: workoutSession.workoutId,
+        workoutName: workouts.name,
+        startedAt: workoutSession.startedtAt,
+        completedAt: workoutSession.completedAt,
+        durationSeconds: workoutSession.durationSeconds,
+        createdAt: workoutSession.createdAt,
+      })
+      .from(workoutSession)
+      .innerJoin(workouts, eq(workoutSession.workoutId, workouts.id))
+      .where(eq(workoutSession.userId, session.user.id))
+      .orderBy(desc(workoutSession.completedAt));
 
     if (userSessions.length === 0) {
-      return res
-        .status(404)
-        .json({ success: true, workoutSession: "No sessions recorded yet." });
+      return res.status(200).json({ success: true, workoutSession: [] });
     }
 
     //grab only the session ids.

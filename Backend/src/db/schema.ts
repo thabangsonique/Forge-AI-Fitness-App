@@ -97,7 +97,9 @@ export const workouts = pgTable("workouts", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   name: text().notNull(),
+
   description: text(),
+  category: text(),
   isTemplate: boolean().notNull().default(false),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true })

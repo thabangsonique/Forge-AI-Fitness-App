@@ -56,6 +56,7 @@ export default function Create() {
     exercises: [],
   });
   const [modalOpen, setModalOpen] = useState(false);
+  const [isPressed, setIsPressed] = useState("");
 
   //ANIAMTED GESTURE HANDLAR
   const translateY = useSharedValue(0);
@@ -99,6 +100,11 @@ export default function Create() {
   ] = useCreateWorkoutMutation();
 
   const DEFAULTS = { sets: 3, reps: 10, restSeconds: 60 };
+
+  const PRESS_RIPPLE = { color: "rgba(0, 0, 0, 0.28)" };
+  const pressStyle = ({ pressed }: { pressed: boolean }) => ({
+    opacity: pressed ? 0.6 : 1,
+  });
 
   //function to add exercise
   const addExercise = (exercise: Exercise) => {
@@ -237,7 +243,9 @@ export default function Create() {
 
         <Pressable
           onPress={() => setModalOpen(true)}
-          className="mt-5 flex-row items-center justify-center gap-3 rounded-3xl bg-primary py-3"
+          onPressIn={() => setIsPressed("add-exercise")}
+          onPressOut={() => setIsPressed("")}
+          className={`${isPressed === "add-exercise" ? "opacity-0.5" : "opacity-1"} mt-5 flex-row items-center justify-center gap-3 overflow-hidden rounded-3xl bg-primary py-3`}
         >
           <Feather name="plus" color="#000" size={20} />
           <Text>Add Exercise</Text>
@@ -273,7 +281,10 @@ export default function Create() {
                   {/* remove exercise */}
                   <Pressable
                     onPress={() => removeExercise(ex.exerciseId)}
-                    className="h-10 w-[80px] items-center justify-center rounded-full bg-primary"
+                    onPressIn={() => setIsPressed("remove")}
+                    onPressOut={() => setIsPressed("")}
+
+                    className={`${isPressed === "remove" ? "opacity-0.5" : "opacity-1"} h-10 w-[80px] items-center justify-center rounded-full bg-primary`}
                   >
                     <Text>Remove</Text>
                   </Pressable>
@@ -288,6 +299,9 @@ export default function Create() {
                       <View className="flex-row items-center gap-6">
                         <Pressable
                           onPress={() => bump(ex.exerciseId, -1, field)}
+                          style={({ pressed }) => ({
+                            opacity: pressed ? 0.5 : 1,
+                          })}
                           className="h-[30px] w-[50px] items-center justify-center rounded-3xl border border-primary"
                         >
                           <Text className="text-lg text-white">-</Text>
@@ -297,6 +311,9 @@ export default function Create() {
                         </Text>
                         <Pressable
                           onPress={() => bump(ex.exerciseId, +1, field)}
+                          style={({ pressed }) => ({
+                            opacity: pressed ? 0.5 : 1,
+                          })}
                           className="h-[30px] w-[50px] items-center justify-center rounded-3xl border border-primary"
                         >
                           <Text className="text-lg text-white">+</Text>
@@ -325,7 +342,7 @@ export default function Create() {
             <GestureDetector gesture={panGesture}>
               <Animated.View
                 style={animatedSheet}
-                className="max-h-[80%] rounded-t-3xl border border-primary/20 bg-background px-4 py-5"
+                className="h-[80%] rounded-t-3xl border border-primary/20 bg-background px-4 py-5"
               >
                 {/* drag handle */}
                 <View className="mb-4 w-full items-center justify-center">
@@ -357,7 +374,9 @@ export default function Create() {
                   renderItem={({ item }) => (
                     <Pressable
                       onPress={() => addExercise(item)}
-                      className="mt-4 flex-row items-center justify-between rounded-3xl border border-primary/30 px-2  py-4"
+                      onPressIn={() => setIsPressed(item.name)}
+                      onPressOut={() => setIsPressed("")}
+                      className={` ${isPressed === item.name ? "opacity-0.5 border-primary" : "opacity-1 border-primary/30"} mt-4 flex-row items-center justify-between rounded-3xl border  px-2  py-4`}
                     >
                       {/* image */}
                       <View className="h-[80px] w-[80px]  items-center justify-center rounded-3xl bg-muted-2/50">

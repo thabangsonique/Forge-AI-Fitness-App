@@ -2,7 +2,7 @@
 //2. user fetch workout by id(GET) - DONE
 //3.user fetch all created workouts. - DONE
 import { fromNodeHeaders } from "better-auth/node";
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { Request, Response } from "express";
 import { db } from "../db";
 import {
@@ -138,7 +138,9 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
         workoutId: workouts.id,
         workoutName: workouts.name,
         workoutDescription: workouts.description,
-
+        workoutType: workouts.workoutType,
+        workoutCategory: workouts.category,
+        image: workouts.image,
         // ----------------------------
         // Exercise information
         // ----------------------------
@@ -151,7 +153,7 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
         difficulty: exercises.difficulty,
         forceType: exercises.forceType,
         mechanics: exercises.mechanics,
-        category: exercises.category,
+        exerciseCategory: exercises.category,
 
         // ----------------------------
         // Workout-exercise information
@@ -166,7 +168,12 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
       .from(workouts)
       .leftJoin(workoutExercises, eq(workouts.id, workoutExercises.workoutId))
       .leftJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
-      .where(eq(workouts.userId, session.user.id));
+      .where(
+        or(
+          eq(workouts.userId, session.user.id),
+          eq(workouts.workoutType, "system")
+        )
+      );
 
     const groupedWorkouts = allWorkouts.reduce(
       (acc, row) => {
@@ -180,7 +187,10 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
             id: row.workoutId,
             name: row.workoutName,
             description: row.workoutDescription,
+            workoutType: row.workoutType,
 
+            workoutCategory: row.workoutCategory,
+            image: row.image,
             exercises: [],
 
             exerciseCount: 0,
@@ -204,7 +214,7 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
             difficulty: row.difficulty,
             forceType: row.forceType,
             mechanics: row.mechanics,
-            category: row.category,
+            exerciseCategory: row.exerciseCategory,
 
             position: row.position,
             sets: row.sets,

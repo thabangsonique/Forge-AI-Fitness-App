@@ -62,6 +62,7 @@ export const verification = pgTable("verification", {
 //custom tables.
 //define enumns.
 export const genderEnum = pgEnum("gender", ["male", "female"]);
+export const workoutTypeEnum = pgEnum("workoutType", ["system", "user"]);
 export const goalEnum = pgEnum("goal", [
   "build muscle",
   "lose fat",
@@ -93,12 +94,12 @@ export const profiles = pgTable("profiles", {
 //all the workouts - created by the user.
 export const workouts = pgTable("workouts", {
   id: uuid().notNull().defaultRandom().primaryKey(),
-  userId: text()
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+  userId: text().references(() => user.id, { onDelete: "cascade" }),
   name: text().notNull(),
 
   description: text(),
+  workoutType: workoutTypeEnum().notNull().default("user"),
+  image: text(),
   category: text(),
   isTemplate: boolean().notNull().default(false),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -139,9 +140,7 @@ export const exercises = pgTable("exercises", {
 //table linking workouts to exercises.-workout creation joining table.
 export const workoutExercises = pgTable("workout_exercises", {
   id: uuid().notNull().defaultRandom().primaryKey(),
-  userId: text()
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+  userId: text().references(() => user.id, { onDelete: "cascade" }),
   workoutId: uuid()
     .notNull()
     .references(() => workouts.id, { onDelete: "cascade" }),

@@ -10,7 +10,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { Feather, FontAwesome5 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,26 +25,32 @@ const quickActions = [
   {
     icon: "dumbbell",
     title: "Wokouts",
+    href: "/(app)/(tabs)/workouts",
   },
   {
     icon: "calendar-alt",
     title: "My Plan",
+    href: "/(app)/(tabs)/workouts",
   },
   {
     icon: "walking",
     title: "Exercises",
+    href: "/(app)/(tabs)/workouts",
   },
   {
     icon: "apple-alt",
     title: "Diet",
+    href: "/(app)/(tabs)/workouts",
   },
   {
     icon: "brain",
     title: "AI Coach",
+    href: "/(app)/(tabs)/workouts",
   },
   {
     icon: "stopwatch",
     title: "Track",
+    href: "/(app)/(tabs)/workouts",
   },
 ];
 
@@ -163,6 +169,7 @@ export default function index() {
   const [isPressed, setIsPressed] = React.useState(false);
   const [calenderDays, setCalenderDays] = useState<DayData[]>([]);
   const [isSelected, setIsSelected] = useState("");
+  const router = useRouter();
 
   //QUERIES.
   const {
@@ -368,7 +375,10 @@ export default function index() {
           {quickActions.map((action, index) => (
             <Pressable
               key={index}
-              onPress={() => setIsSelected(action.title)}
+
+              onPress={() => {
+                (setIsSelected(action.title), router.push(action.href));
+              }}
               className={`h-[90px] w-[80px] items-center justify-between rounded-3xl px-2 py-5 ${isSelected === action.title ? "bg-primary/20" : "bg-muted/10 "}`}
             >
               <FontAwesome5

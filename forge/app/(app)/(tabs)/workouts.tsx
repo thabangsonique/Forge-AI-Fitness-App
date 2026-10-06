@@ -2,10 +2,10 @@ import {
   useGetAllWorkoutsQuery,
   useGetScheduledWorkoutsQuery,
   useGetWorkoutsBySearchQuery,
-  useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
@@ -16,10 +16,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 
-//WORKOUT FILTER OPTIONS
 const workoutFilters = [
   "All",
   "Push",
@@ -30,36 +28,9 @@ const workoutFilters = [
   "core",
 ];
 
-type ScheduledWorkouts = {
+type ScheduledWorkout = {
   workoutId: string;
   scheduledDate: string;
-};
-
-type CompletedSessions = {
-  workoutId: string;
-  completedAt: string;
-};
-
-type SessionHistory = {
-  id: string;
-
-  userId: string;
-  workoutId: string;
-  workoutName: string;
-  startedtAt: Date;
-  completedAt: Date;
-  durationSeconds: number;
-  createdAt: Date;
-  sets: sessionSet[];
-};
-
-type sessionSet = {
-  id: string;
-  sessionId: string;
-  exerciseId: string;
-  setNumber: number;
-  reps: number;
-  weight: number;
 };
 
 type Exercise = {
@@ -73,7 +44,6 @@ type Exercise = {
   forceType: string | null;
   mechanics: string | null;
   category: string | null;
-
   position: number;
   sets: number;
   reps: number;
@@ -84,241 +54,412 @@ type Workout = {
   id: string;
   name: string;
   description: string | null;
-
+  image: string;
+  workoutType: string;
   exercises: Exercise[];
-
   exerciseCount: number;
   totalSets: number;
 };
 
 const push = require("../../../assets/images/app-images/push.jpeg");
-export default function plan() {
-  const [isPressed, setIsPressed] = React.useState(false);
+
+export default function Plan() {
+  const [isPressed, setIsPressed] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
-  const [debouncedSearchTerm, setDeboundedSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [workoutSelected, setWorkoutSelected] = useState("");
+  const router = useRouter();
+
+  // --------------------------------------------------
+  // SEARCH DEBOUNCE
+  // --------------------------------------------------
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDeboundedSearchTerm(searchTerm.trim());
+      setDebouncedSearchTerm(searchTerm.trim());
     }, 300);
 
-    return () => {
-      clearTimeout(timer);
-    };
+    return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const {
-    data: ScheduledWorkouts,
-    isLoading: scheduledLoading,
-    error: scheduledError,
-  } = useGetScheduledWorkoutsQuery();
-  const {
-    data: sessionHistory,
-    isLoading: historyLoading,
-    error: historyError,
-  } = useGetWorkoutSessionHistoryQuery();
+  // --------------------------------------------------
+  // API QUERIES
+  // --------------------------------------------------
+
+  const { data: scheduledWorkouts } = useGetScheduledWorkoutsQuery();
+
   const { data: allWorkouts } = useGetAllWorkoutsQuery();
 
-  const {
-    data: searchedWorkouts, //the workouts based on the search
-    isLoading: searchLoading,
-    isError: isSearchError,
-  } = useGetWorkoutsBySearchQuery(debouncedSearchTerm, {
-    skip: debouncedSearchTerm.length === 0,
-  });
+  const { data: searchedWorkouts } = useGetWorkoutsBySearchQuery(
+    debouncedSearchTerm,
+    {
+      skip: debouncedSearchTerm.length === 0,
+    }
+  );
 
-  //return workouts based on the search bar.
+  // --------------------------------------------------
+  // DETERMINE WHICH WORKOUTS TO DISPLAY
+  // --------------------------------------------------
+
   const workoutsToDisplay = useMemo(() => {
+    // If the user is searching,
+    // display search results.
     if (debouncedSearchTerm.length > 0) {
       return searchedWorkouts ?? [];
     }
 
+    // Otherwise display all workouts.
     return allWorkouts ?? [];
   }, [debouncedSearchTerm, allWorkouts, searchedWorkouts]);
 
-  //filtering the workouts- either all / searched.
+  // --------------------------------------------------
+  // FILTER WORKOUTS
+  // --------------------------------------------------
+
   const filteredWorkouts = useMemo(() => {
-    console.log(
-      "INSIDE useMemo - workoutsToDisplay:",
-      workoutsToDisplay?.length
-    );
-    console.log("INSIDE useMemo - activeFilter:", activeFilter);
-
+    // Start with whatever workouts we decided
+    // should be displayed.
     let workouts = workoutsToDisplay;
-    console.log("INSIDE useMemo - starting workouts:", workouts?.length);
 
+    // "All" means don't apply another filter.
     if (activeFilter === "All") {
-      console.log("INSIDE useMemo - returning all workouts");
       return workouts;
     }
 
-    workouts = workouts.filter((workout) => {
-      return workout.name.toLowerCase().includes(activeFilter.toLowerCase());
-    });
+    // Filter based on the workout name.
+    workouts = workouts.filter((workout) =>
+      workout.name.toLowerCase().includes(activeFilter.toLowerCase())
+    );
 
-    console.log("INSIDE useMemo - filtered workouts:", workouts?.length);
     return workouts;
   }, [workoutsToDisplay, activeFilter]);
 
-  //find next workout.
-  const getNextWorkout = (ScheduledWorkouts: ScheduledWorkouts[]) => {
-    //fetch today's date
+  // --------------------------------------------------
+  // FIND NEXT SCHEDULED WORKOUT
+  // --------------------------------------------------
+
+  const getNextWorkout = (
+    scheduledWorkouts: ScheduledWorkout[]
+  ): Workout | undefined => {
+    // Get today's date.
     const today = new Date();
+
+    // Set today's time to midnight.
     today.setHours(0, 0, 0, 0);
 
-    const upcoming = ScheduledWorkouts.filter((sw) => {
-      const workoutDate = new Date(sw.scheduledDate);
+    // Keep only workouts scheduled for today or later.
+    const upcoming = scheduledWorkouts.filter(
+      (scheduledWorkout) => new Date(scheduledWorkout.scheduledDate) >= today
+    );
 
-      return workoutDate >= today;
-    });
-
-    //sort dates.
-    upcoming.sort((a, b) => {
-      return (
+    // Sort from earliest scheduled date to latest.
+    upcoming.sort(
+      (a, b) =>
         new Date(a.scheduledDate).getTime() -
         new Date(b.scheduledDate).getTime()
-      );
-    });
+    );
 
-    //grab first date as next workout.
+    // The first item is the next workout.
     const nextSession = upcoming[0];
-    console.log("NEXT SESSION:", nextSession);
-    console.log("ALL WORKOUTS:", allWorkouts);
 
+    // Find the complete workout from all workouts.
     const workoutDetails = allWorkouts?.find(
-      (w) => w.id === nextSession?.workoutId
+      (workout) => workout.id === nextSession?.workoutId
     );
 
     return workoutDetails;
   };
 
-  const nextWorkout = getNextWorkout(ScheduledWorkouts ?? []);
-  console.log("FILTERED WORKOUTS", filteredWorkouts);
+  const nextWorkout = getNextWorkout(scheduledWorkouts ?? []);
 
-  return (
-    <SafeAreaView className="flex-1 bg-background  px-5 pt-5">
-      {/* header section */}
-      <View className="flex-row items-center justify-between">
-        {/* back button*/}
-        <Pressable className="rounded-full\ h-10 w-10 items-center justify-center">
-          <Feather name="chevron-left" size={25} color="#fff" />
-        </Pressable>
+  // --------------------------------------------------
+  // FEATURED WORKOUTS
+  // --------------------------------------------------
 
-        {/* text */}
-        <Text className=" text-white">Workouts</Text>
+  const defaultWorkouts = allWorkouts?.filter((w) => {
+    return w.workoutType === "system";
+  });
 
-        {/* dot icons */}
-        <Pressable>
-          <Feather name="more-vertical" size={20} color="#fff" />
-        </Pressable>
-      </View>
+  console.log(
+    "HERE ARE ALL THE DEFAULT WORKOUTS",
 
-      <Text className="mt-5 uppercase text-muted-2">Upcoming workout</Text>
+    defaultWorkouts
+  );
+  // --------------------------------------------------
+  // HEADER
+  // --------------------------------------------------
 
-      {nextWorkout ? (
-        <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
-          <Image source={push} className="h-full w-full" resizeMode="cover" />
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.9)"]}
-            className="absolute inset-0"
+  const renderHeader = () => {
+    return (
+      <View>
+        {/* -------------------------------------------- */}
+        {/* PAGE HEADER */}
+        {/* -------------------------------------------- */}
+
+        <View className="flex-row items-center justify-between">
+          <Pressable className="h-10 w-10 items-center justify-center rounded-full">
+            <Feather name="chevron-left" size={25} color="#fff" />
+          </Pressable>
+
+          <Text className="text-white">Workouts</Text>
+
+          <Pressable>
+            <Feather name="more-vertical" size={20} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* -------------------------------------------- */}
+        {/* UPCOMING WORKOUT */}
+        {/* -------------------------------------------- */}
+
+        <Text className="mt-5 uppercase text-muted-2">Upcoming workout</Text>
+
+        {nextWorkout ? (
+          <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
+            {/* Workout image */}
+            <Image source={push} className="h-full w-full" resizeMode="cover" />
+
+            {/* Dark gradient over image */}
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.9)"]}
+              className="absolute inset-0"
+            />
+
+            {/* Workout information */}
+            <View className="absolute bottom-[90px] left-5 right-5 flex w-[300px]">
+              <Text className="font-bold uppercase text-white">
+                {nextWorkout.name}
+              </Text>
+
+              <Text className="mt-2 text-muted-2">
+                {nextWorkout.description}
+              </Text>
+            </View>
+
+            {/* Start workout button */}
+            <Pressable
+              className={`absolute bottom-5 left-5 h-[50px] w-[200px] items-center justify-center rounded-full bg-primary ${
+                isPressed ? "opacity-60" : "opacity-100"
+              }`}
+              // onPressIn={() => {
+              //   setIsPressed(true);
+              // }}
+              // onPressOut={() => {
+              //   setIsPressed(false);
+              // }}
+              onPress={() => {
+                console.log("Starting workout:", nextWorkout.id);
+              }}
+            >
+              <View className="flex-row items-center gap-12">
+                <Text className="font-bold">Start Workout</Text>
+
+                <Feather name="chevron-right" color="black" size={23} />
+              </View>
+            </Pressable>
+          </View>
+        ) : (
+          <View className="mt-2 h-[200px] w-full items-center justify-center rounded-3xl bg-muted-2/10">
+            <Feather name="calendar" size={30} color="#888" />
+
+            <Text className="mt-3 text-white">No upcoming workouts</Text>
+
+            <Text className="mt-1 text-muted-2/50">
+              Schedule a workout to see it here.
+            </Text>
+          </View>
+        )}
+
+        {/* -------------------------------------------- */}
+        {/* SEARCH */}
+        {/* -------------------------------------------- */}
+
+        <View className="mt-6 flex-row items-center rounded-2xl bg-muted-2/10 px-4">
+          <Feather name="search" size={20} color="#888" />
+
+          <TextInput
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            placeholder="Search workouts..."
+            placeholderTextColor="#888"
+            className="ml-3 h-12 flex-1 text-white"
           />
 
-          {/* text container */}
-          <View className="absolute bottom-[90px] left-5 right-5 flex w-[300px]">
-            <Text className=" font-bold uppercase text-white">
-              {nextWorkout.name}
-            </Text>
-            <Text className="mt-2 text-muted-2">{nextWorkout.description}</Text>
-          </View>
-
-          {/* start workout button */}
-          <Pressable
-            className={`absolute bottom-5 left-5  h-[50px] w-[200px] items-center justify-center rounded-full bg-primary ${
-              isPressed ? "opacity-60" : "opacity-100"
-            }`}
-            onPressIn={() => {
-              setIsPressed(true);
-              console.log("BUTTON IS PRESSING");
-            }}
-            onPressOut={() => setIsPressed(false)}
-          >
-            <View className="flex-row items-center gap-12">
-              <Text className="font-bold">Start Workout</Text>
-              <Feather name="chevron-right" color="black" size={23} />
-            </View>
-          </Pressable>
+          {searchTerm.length > 0 && (
+            <Pressable onPress={() => setSearchTerm("")}>
+              <Feather name="x" size={20} color="#888" />
+            </Pressable>
+          )}
         </View>
-      ) : (
-        <View className="mt-8 h-[130px] items-center justify-center rounded-3xl bg-muted-2/10">
-          <Text className=" text-center text-lg text-white">
-            No Upcoming Workouts
-          </Text>
-          <Text className="text-center text-muted-2">
-            Scheduled your first workout
-          </Text>
-        </View>
-      )}
 
-      {/* category selector */}
-      {/* saerch workouts. */}
-      <TextInput
-        value={searchTerm}
-        onChangeText={(text) => setSearchTerm(text)}
-        placeholder="Search by workout name..."
-        className="mt-5 h-[45px] rounded-3xl bg-muted-2/10 px-5 text-white placeholder:text-muted/50"
-        selectionColor="#dae86aff"
-      />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 12 }}
-        className="mt-6 h-[80px] flex-grow-0 pb-4"
-      >
-        {workoutFilters.map((wf, idx) => (
-          <Pressable
-            key={idx}
-            onPress={() => setActiveFilter(wf)}
-            className={`h-10 w-20 items-center justify-center rounded-3xl  ${activeFilter === wf ? " bg-primary" : "bg-muted-2/10"}`}
-          >
-            <Text
-              className={`text-sm  ${activeFilter === wf ? "text-black" : "text-muted-2/50"}`}
+        {/* -------------------------------------------- */}
+        {/* FILTERS */}
+        {/* -------------------------------------------- */}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            gap: 12,
+          }}
+          className="mt-6"
+        >
+          {workoutFilters.map((filter) => (
+            <Pressable
+              key={filter}
+              onPress={() => setActiveFilter(filter)}
+              className={`rounded-full px-5 py-3 ${
+                activeFilter === filter ? "bg-primary" : "bg-muted-2/10"
+              }`}
             >
-              {wf}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+              <Text
+                className={`font-medium ${
+                  activeFilter === filter ? "text-black" : "text-white"
+                }`}
+              >
+                {filter}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
-      <Text className="mb-4 mt-3 text-muted-2/50">
-        Click on workout to start.
-      </Text>
-      {/* //FILTERED WORKOUTS */}
+        {/* -------------------------------------------- */}
+        {/* FEATURED WORKOUTS */}
+        {/* -------------------------------------------- */}
+
+        <View className="mt-8">
+          <Text className="text-lg font-bold text-white">
+            Featured Workouts
+          </Text>
+
+          <Text className="mt-1 text-muted-2/50">Ready-to-follow workouts</Text>
+
+          <FlatList
+            data={defaultWorkouts}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              gap: 12,
+              paddingTop: 16,
+            }}
+            renderItem={({ item }) => (
+              <Pressable
+                className={`${isPressed === item.id ? "opacity-60" : "opacity-100"} relative h-[160px] w-[220px] overflow-hidden rounded-3xl bg-muted-2/10`}
+                onPress={() => {
+                  console.log("WORKOUT PRESSED:", item.id);
+
+                  router.push({
+                    pathname: "/workout/[id]",
+                    params: {
+                      id: item.id,
+                    },
+                  });
+                }}
+              >
+                <Image
+                  source={{ uri: item.image }}
+                  className="h-full w-full"
+                  resizeMode="cover"
+                />
+
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.9)"]}
+                  className="absolute inset-0"
+                />
+
+                <View className="absolute bottom-4 left-4 right-4">
+                  <Text className="text-lg font-bold uppercase text-white">
+                    {item.name} thabang
+                  </Text>
+
+                  <Text className="mt-1 text-xs text-muted-2">
+                    {item.description}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          />
+        </View>
+
+        {/* -------------------------------------------- */}
+        {/*YOUR WORKOUTS HEADER */}
+        {/* -------------------------------------------- */}
+
+        <View className="mt-8">
+          <Text className="text-lg font-bold text-white">Your Workouts</Text>
+
+          <Text className="mt-2 text-muted-2/50">
+            Click on a workout to start.
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
+
+  return (
+    <SafeAreaView className="flex-1 bg-background px-5 pb-8 pt-5">
       <FlatList
         data={filteredWorkouts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={{
+          paddingBottom: 40,
+        }}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => setWorkoutSelected(item.name)}
+            onPressIn={() => setWorkoutSelected(item.id)}
             onPressOut={() => setWorkoutSelected("")}
-            className={` ${workoutSelected === item.name ? "border-primary/40 opacity-60" : "border-primary/10  opacity-100"} mb-5 h-[120px] w-full gap-2 overflow-hidden rounded-3xl border bg-muted-2/10 px-4 pt-8`}
+            onPress={() => {
+              console.log("Selected workout:", item.id);
+            }}
+            className={`mb-5 mt-5 h-[120px] w-full gap-2 overflow-hidden rounded-3xl border px-4 pt-8 ${
+              workoutSelected === item.id
+                ? "border-primary/40 opacity-60"
+                : "border-primary/10 opacity-100"
+            } bg-muted-2/10`}
           >
-            {/* header */}
+            {/* Workout name */}
             <Text className="text-lg text-white">{item.name}</Text>
+
+            {/* Description */}
             <Text className="text-xs text-muted-2/50">{item.description}</Text>
+
+            {/* Workout statistics */}
             <View className="flex-row">
               <Text className="mr-3 text-muted-2/50">
                 Exercises: {item.exerciseCount}
               </Text>
+
               <Text className="text-muted-2/50">
                 Total Sets: {item.totalSets}
               </Text>
             </View>
           </Pressable>
         )}
+        ListEmptyComponent={
+          <View className="items-center py-10">
+            <Feather name="activity" size={30} color="#666" />
+
+            <Text className="mt-3 text-white">
+              {debouncedSearchTerm.length > 0
+                ? "No workouts found"
+                : "No workouts yet"}
+            </Text>
+
+            <Text className="mt-1 text-center text-muted-2/50">
+              {debouncedSearchTerm.length > 0
+                ? "Try searching for another workout."
+                : "Create your first workout to see it here."}
+            </Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );

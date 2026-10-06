@@ -121,7 +121,7 @@ export const getWorkoutSessionHistory = async (req: Request, res: Response) => {
       .orderBy(desc(workoutSession.completedAt));
 
     if (userSessions.length === 0) {
-      return res.status(200).json({ success: true, workoutSession: [] });
+      return res.status(200).json({ success: true, workoutSessions: [] });
     }
 
     //grab only the session ids.
@@ -172,17 +172,17 @@ export const createWorkoutSession = async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Unauthorized - no token found." });
     }
 
-    const { workoutId, startedtAt, completedAt, durationSeconds, sets } =
+    const { workoutId, startedAt, completedAt, durationSeconds, sets } =
       req.body;
 
-    if (!workoutId || !startedtAt || !completedAt) {
+    if (!workoutId || !startedAt || !completedAt) {
       return res.status(400).json({
         error: "workoutId, startedAt, and completedAt are required.",
       });
     }
 
     //calculate the duration in seconds.
-    const start = new Date(startedtAt); //format friendly for postgres,
+    const start = new Date(startedAt); //format friendly for postgres,
     const end = new Date(completedAt);
     const calculatedDuration = Math.floor(
       (end.getTime() - start.getTime()) / 1000

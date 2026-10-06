@@ -78,7 +78,9 @@ export interface Workout {
   id: string;
   name: string;
   description: string | null;
-  category: string;
+  image: string;
+  workoutCategory: string;
+  workoutType: string;
   exercises: Exercise[];
 
   exerciseCount: number;

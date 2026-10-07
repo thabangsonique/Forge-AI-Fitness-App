@@ -87,6 +87,26 @@ export interface Workout {
   totalSets: number;
 }
 
+export interface WorkoutSession {
+  workoutId: string;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  sets: WorkoutSets;
+}
+
+export interface SetData {
+  weight: string;
+  reps: string;
+  completed: boolean;
+}
+
+export interface WorkoutSets {
+  [exerciseId: string]: {
+    [setIndex: number]: SetData;
+  };
+}
+
 export const api = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001",
@@ -170,6 +190,22 @@ export const api = createApi({
               { type: "CompletedSessions", id: "LIST" },
             ]
           : [{ type: "CompletedSessions", id: "LIST" }],
+    }),
+
+    //create session.
+    createWorkoutSession: build.mutation<WorkoutSession, WorkoutSession>({
+      query: (workoutSets) => ({
+        url: `/api/workouts/session`,
+        method: "POST",
+        body: workoutSets,
+      }),
+      invalidatesTags: [
+        {
+          type: "CompletedSessions",
+          id: "LIST",
+        },
+        { type: "SessionHistory", id: "LIST" },
+      ],
     }),
 
     //fetch user workout session history.
@@ -274,4 +310,5 @@ export const {
   useGetWorkoutsBySearchQuery,
   useGetExercisesQuery,
   useCreateWorkoutMutation,
+  useCreateWorkoutSessionMutation,
 } = api;

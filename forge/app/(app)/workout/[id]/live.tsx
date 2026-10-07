@@ -1,9 +1,20 @@
-import { useGetAllWorkoutsQuery } from "@/features/api";
+import {
+  useCreateWorkoutSessionMutation,
+  useGetAllWorkoutsQuery,
+} from "@/features/api";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Image, Pressable, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  Text,
+  TextInput,
+  ToastAndroid,
+  View,
+} from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -28,6 +39,7 @@ type WorkoutSets = {
 };
 
 export default function live() {
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const { data: allWorkouts, isLoading: loadingWorkouts } =
@@ -42,6 +54,10 @@ export default function live() {
   const [selected, setSelected] = useState("");
   const [startedAt] = useState(new Date().toISOString());
   const [completedAt] = useState(new Date().toISOString());
+
+  //QUERIES.
+  const [createWorkoutSession, { isLoading: creatingSession }] =
+    useCreateWorkoutSessionMutation();
 
   const totalExercises = workout?.exercises.length;
 
@@ -105,7 +121,7 @@ export default function live() {
     }
   };
 
-  const handleFinishWorkout = () => {
+  const handleFinishWorkout = async () => {
     const completedAt = new Date().toISOString();
 
     //calculate duration.
@@ -121,6 +137,25 @@ export default function live() {
       durationSeconds,
       sets,
     };
+
+    try {
+      await createWorkoutSession(workoutSets).unwrap();
+
+      ToastAndroid.show(
+        "Workout completed successfully!",
+        ToastAndroid.SHORT //how long the toast stays on the screen.
+      );
+    } catch (error) {
+      console.log("Failed to create workout session", error);
+
+      ToastAndroid.show(
+        "Failed to create workout session.Please try again.",
+        ToastAndroid.SHORT
+      );
+    }
+
+    //redirect to workout session created page.
+    router.replace(`/(app)/workout/${id}/completeSession`);
   };
 
   console.log("ALL SETS", workout?.exercises);
@@ -274,8 +309,17 @@ export default function live() {
 
         {/* button */}
         <View className="w-full px-5">
-          <Pressable className="mt-4 h-[40px] w-full items-center justify-center rounded-full bg-primary">
-            <Text>Finish Workout</Text>
+          <Pressable
+            onPress={handleFinishWorkout}
+            disabled={creatingSession}
+
+            className="mt-4 h-[40px] w-full items-center justify-center rounded-full bg-primary"
+          >
+            {creatingSession ? (
+              <ActivityIndicator size={20} />
+            ) : (
+              <Text>Finish Workout</Text>
+            )}
           </Pressable>
         </View>
       </KeyboardAwareScrollView>

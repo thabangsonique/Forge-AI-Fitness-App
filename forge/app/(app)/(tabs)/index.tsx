@@ -8,7 +8,7 @@ import {
   useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
 import { authClient } from "@/lib/auth-client";
-import { Feather, FontAwesome5 } from "@expo/vector-icons";
+import { Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -19,6 +19,7 @@ const userImage = require("../../../assets/images/app-images/user-profile.png");
 const push = require("../../../assets/images/app-images/push.jpeg");
 const pull = require("../../../assets/images/app-images/pull.png");
 const legs = require("../../../assets/images/app-images/Legs.png");
+const gBackground = require("../../../assets/images/app-images/gradient.png");
 
 //QUICK ACTIONS.
 const quickActions = [
@@ -192,7 +193,7 @@ export default function index() {
   useEffect(() => {
     console.log("HERE ARE ALL THE SCHEDULED WORKOUTS", ScheduledWorkouts);
     console.log("HERE ARE ALL THE COMPLETED SESSIONS", completedSessions);
-    console.log("HERE IS THE WORKOUT SESSION HISTORY DATA:", workoutHistory);
+    console.log("session history:", workoutHistory);
 
     if (!scheduledLoading && !LoadingCompleted) {
       //check for errors.
@@ -254,7 +255,8 @@ export default function index() {
     syncProfileIfNeeded();
   }, []);
 
-  // logout functiomn.
+  //FUNCTIONS
+  // logout function.
   const handleLogOut = async () => {
     try {
       await authClient.signOut();
@@ -264,9 +266,22 @@ export default function index() {
       console.error("Logout failed", error);
     }
   };
+
+  const uniqueWorkoutsCount = new Set(
+    workoutHistory?.map((session) => session.workoutId) ?? []
+  ).size;
+
   return (
     <SafeAreaView className="flex-1 bg-background px-5 pt-5">
       {/* SECTION- user profile*/}
+      {/* background gradient */}
+      {/* <View className="absolute inset-0 z-0 overflow-hidden">
+        <Image
+          source={gBackground}
+          className="absolute  top-[50px] h-[400px] w-[400px] opacity-10"
+          resizeMode="cover"
+        />
+      </View> */}
       <View className="flex-row items-center justify-between pb-4">
         {/* profile image + name */}
         <Image
@@ -364,6 +379,35 @@ export default function index() {
           </View>
         </View>
 
+        {/* My activity */}
+        <Text className="mt-9 text-white">My Activity</Text>
+        <View className="mt-5 flex-row items-center justify-between rounded-3xl bg-muted/10 px-5 py-4">
+          <View className="flex-1 items-center justify-center gap-3">
+            <View className="rounded-full bg-primary/10 p-2">
+              <Ionicons name="barbell-outline" size={20} color="#D8FF00" />
+            </View>
+
+            <Text className="text-white">{uniqueWorkoutsCount}</Text>
+            <Text className="text-muted-2/50">Workouts</Text>
+          </View>
+          <View className="flex-1 items-center justify-center gap-3">
+            <View className="rounded-full bg-primary/10 p-2">
+              <Ionicons name="flame-outline" size={20} color="#D8FF00" />
+            </View>
+
+            <Text className="text-white">3,240</Text>
+            <Text className="text-muted-2/50">calories</Text>
+          </View>
+          <View className="flex-1 items-center justify-center gap-3">
+            <View className="rounded-full bg-primary/10 p-2">
+              <Ionicons name="watch-outline" size={20} color="#D8FF00" />
+            </View>
+
+            <Text className="text-white">5h 30 min</Text>
+            <Text className="text-muted-2/50">Trained</Text>
+          </View>
+        </View>
+
         {/* SECTION-quick actions */}
         <Text className="text-md mb-3 mt-9 text-muted-2">Quick Actions</Text>
         <ScrollView
@@ -421,7 +465,7 @@ export default function index() {
                 <Text className="mb-2 text-white">{wh.workoutName}</Text>
                 <Text className="text-muted">
                   {Math.floor(wh.durationSeconds / 60)} min -{" "}
-                  {wh.sets[idx].weight} kg
+                  {wh.sets?.[0]?.weight ?? "N/A"} kg
                 </Text>
               </View>
 

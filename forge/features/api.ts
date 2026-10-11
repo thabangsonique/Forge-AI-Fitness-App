@@ -13,7 +13,6 @@ export interface CompletedSessions {
 
 export interface SessionHistory {
   id: string;
-
   userId: string;
   workoutId: string;
   workoutName: string;
@@ -92,7 +91,14 @@ export interface WorkoutSession {
   startedAt: string;
   completedAt: string;
   durationSeconds: number;
-  sets: WorkoutSets;
+  sets: WorkoutSet[];
+}
+
+export interface WorkoutSet {
+  exerciseId: string;
+  setNumber: number;
+  weight: string;
+  reps: string;
 }
 
 export interface SetData {

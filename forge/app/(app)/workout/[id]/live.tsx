@@ -18,12 +18,19 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type WorkoutSet = {
+  exerciseId: string;
+  setNumber: number;
+  weight: string;
+  reps: string;
+};
+
 type WorkoutSession = {
   workoutId: string;
   startedAt: string;
   completedAt: string;
   durationSeconds: number;
-  sets: WorkoutSets;
+  sets: WorkoutSet[];
 };
 
 type SetData = {
@@ -129,13 +136,24 @@ export default function live() {
       (new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000
     );
 
+    //convert object into array.
+    const flatSets = Object.entries(sets).flatMap(([exerciseId, setMap]) =>
+      //go a level deeper for the set data
+      Object.entries(setMap).map(([setIndex, setData]) => ({
+        exerciseId,
+        setNumber: Number(setIndex),
+        weight: setData.weight,
+        reps: setData.reps,
+      }))
+    );
+
     //set payload structure for backend.
     const workoutSets = {
       workoutId: id,
       completedAt,
       startedAt,
       durationSeconds,
-      sets,
+      sets: flatSets,
     };
 
     try {

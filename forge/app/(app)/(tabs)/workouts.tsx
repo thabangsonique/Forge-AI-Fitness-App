@@ -371,7 +371,7 @@ export default function Plan() {
 
                 <View className="absolute bottom-4 left-4 right-4">
                   <Text className="text-lg font-bold uppercase text-white">
-                    {item.name} thabang
+                    {item.name}
                   </Text>
 
                   <Text className="mt-1 text-xs text-muted-2">

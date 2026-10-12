@@ -3,7 +3,7 @@
 //-total workout time.(sum of all workout sessions) - DONE
 //-average workout duration.(calculated from the total workout time) - DONE
 import { fromNodeHeaders } from "better-auth/node";
-import { count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { Request, Response } from "express";
 import { db } from "../db";
 import {
@@ -35,6 +35,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       completedSession,
       recentActivity,
       peformanceMatrics,
+      totalWeeklyVolume,
       userProfile,
     ] = await Promise.all([
       calculateTotalWorkouts(userId),
@@ -42,6 +43,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       calculateCompletedSessions(userId),
       getRecentAcivity(userId),
       calculatePerformanceMetrics(userId),
+      calculateWeeklyVolume(userId),
       getUserProfile(userId),
     ]);
 
@@ -49,11 +51,12 @@ export const getUserStats = async (req: Request, res: Response) => {
       overview: {
         totalWorkout,
         completedSession,
-        userProfile: userProfile,
+        userProfile,
       },
       exerciseBreakedown,
       recentActivity,
       peformanceMatrics,
+      totalWeeklyVolume,
     };
 
     return res.status(200).json({ success: true, stats });
@@ -87,7 +90,7 @@ const calculateCompletedSessions = async (userId: string) => {
 
   return {
     totalSessions: Number(result[0].count),
-    totalDurationSeconds: Number(result[0].count) || 0,
+    totalDurationSeconds: Number(result[0].totalDuration) || 0,
   };
 };
 
@@ -132,6 +135,9 @@ const getRecentAcivity = async (userId: string) => {
   //find volumes for the sets using the session ids.
   const sessionIds = recent.map((session) => session.id);
 
+  if (sessionIds.length === 0) {
+    return [];
+  }
   //find sets for the sessions.
   const sets = await db
     .select({
@@ -145,6 +151,7 @@ const getRecentAcivity = async (userId: string) => {
   const volumeBySessionId = new Map<string, number>();
 
   for (const set of sets) {
+    //calculate volume for th current set.
     const volume = set.reps * (set.weight ?? 0);
 
     const existing = volumeBySessionId.get(set.sessionId) || 0;
@@ -187,6 +194,7 @@ const calculatePerformanceMetrics = async (userId: string) => {
       )
     );
 
+  console.log("Performance metric", metric);
   return metric;
 };
 
@@ -197,4 +205,88 @@ const getUserProfile = async (userId: string) => {
   });
 
   return profile;
+};
+
+//calculate total weekly volume
+const calculateWeeklyVolume = async (userId: string) => {
+  //find current date according to jhb timezone.
+  const now = new Date();
+
+  const JohannesburgNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+  //get the week day index version of the johhanessburgNow date.
+  const dayOfWeek = JohannesburgNow.getUTCDay();
+  const daySinceMonday = (dayOfWeek + 6) % 7;
+
+  //find monday in miliseconds.
+  const mondayUtc = Date.UTC(
+    JohannesburgNow.getUTCFullYear(),
+    JohannesburgNow.getUTCMonth(),
+    JohannesburgNow.getUTCDate() - daySinceMonday //gives us date of monday
+  );
+
+  //monday as start of week arccording to jhb timezone.
+  const weekStart = new Date(mondayUtc - 2 * 24 * 60 * 60 * 1000);
+
+  const nextWeekStart = new Date(
+    mondayUtc + 7 * 24 * 60 * 60 * 1000 - 2 * 60 * 60 * 1000
+  );
+
+  const localDay = sql<string>`to_char(${workoutSession.completedAt} AT TIME ZONE 'Africa/Johannesburg',
+      'YYYY-MM-DD' )`;
+
+  //fetch volumes from data.
+  const dailyResults = await db
+    .select({
+      date: localDay,
+      volume: sql<number>`coalesce(sum(${workoutSessionSets.reps} * coalesce(${workoutSessionSets.weight}, 0)), 0)`,
+    })
+    .from(workoutSessionSets)
+    .innerJoin(
+      workoutSession,
+      eq(workoutSessionSets.sessionId, workoutSession.id)
+    )
+    .where(
+      and(
+        eq(workoutSession.userId, userId),
+        gte(workoutSession.completedAt, weekStart),
+        lt(workoutSession.completedAt, nextWeekStart)
+      )
+    )
+    .groupBy(localDay)
+    .orderBy(localDay);
+
+  const volumeByDate = new Map<string, number>();
+
+  for (const day of dailyResults) {
+    volumeByDate.set(day.date, day.volume);
+  }
+
+  //fetch all days, accomodate days without workout session.
+  const dailyVolumes = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(mondayUtc + index * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    return {
+      date,
+      volume: volumeByDate.get(date) ?? 0,
+    };
+  });
+
+  //accumulator to find total volume.
+  const totalVolume = dailyVolumes.reduce(
+    (total, day) => total + day.volume,
+    0
+  );
+
+  return {
+    weekStart: dailyVolumes[0].date,
+    weekEndExclusive: new Date(mondayUtc + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10),
+
+    totalWeeklyVolume: totalVolume,
+    dailyVolumes,
+  };
 };

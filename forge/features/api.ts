@@ -1,6 +1,17 @@
 import { authClient } from "@/lib/auth-client";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
+export interface UserProfile {
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  userId: string;
+  gender: string;
+  goal: string;
+  experience: string;
+  weightUnit: string;
+}
+
 export interface ScheduledWorkouts {
   workoutId: string;
   scheduledDate: string;
@@ -113,6 +124,61 @@ export interface WorkoutSets {
   };
 }
 
+export interface UserStats {
+  overview: {
+    totalWorkout: number;
+    completedSession: CompletedSession;
+    userProfile: UserProfile;
+  };
+
+  exerciseBreakdown: ExerciseBreakdown;
+  recentActivity: RecentActivity;
+  peformanceMatrics: PerformanceMetrics;
+  totalWeeklyVolume: TotalWeeklyVolume;
+}
+
+export interface ExerciseBreakdown {
+  muscle: string;
+  exerciseName: string;
+  count: number;
+}
+
+export interface CompletedSession {
+  totalSessions: number;
+  totalDurationSeconds: number;
+}
+
+export interface RecentActivity {
+  totalVolume: number | undefined;
+  totalTimeMinutes: number;
+  id: string;
+  workoutId: string;
+  workoutName: string;
+  completedAt: Date;
+  durationSeconds: number;
+}
+
+export interface PerformanceMetrics {
+  muscle: string;
+  maxWeight: number;
+  avgWeight: number;
+  maxReps: number;
+  totalVolume: number;
+  totalSets: number;
+}
+
+export interface TotalWeeklyVolume {
+  weekStart: Date;
+  weekEndExclusive: Date;
+  totalWeeklyVolume: number;
+  dailyVolumes: DailyVolumes[];
+}
+
+export interface DailyVolumes {
+  date: string;
+  volume: number;
+}
+
 export const api = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001",
@@ -134,6 +200,7 @@ export const api = createApi({
     "SessionHistory",
     "Workouts",
     "Exercises",
+    "Progress",
   ],
 
   endpoints: (build) => ({
@@ -211,6 +278,7 @@ export const api = createApi({
           id: "LIST",
         },
         { type: "SessionHistory", id: "LIST" },
+        "Progress",
       ],
     }),
 
@@ -305,6 +373,16 @@ export const api = createApi({
             ]
           : [{ type: "Exercises" as const, id: "LIST" }],
     }),
+
+    //GET USER STATS.
+    getUserStats: build.query<UserStats, void>({
+      query: () => "/api/performance/stats",
+      transformResponse: (response: { success: true; stats: UserStats }) => {
+        return response.stats;
+      },
+
+      providesTags: ["Progress"],
+    }),
   }),
 });
 
@@ -317,4 +395,5 @@ export const {
   useGetExercisesQuery,
   useCreateWorkoutMutation,
   useCreateWorkoutSessionMutation,
+  useGetUserStatsQuery,
 } = api;

@@ -1,6 +1,12 @@
+import VolumeScreen from "@/components/ui/volumeScreen";
 import React, { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import BodyScreen from "@/components/ui/bodyScreen";
+import MuscleScreen from "@/components/ui/muscleScreen";
+import PrScreen from "@/components/ui/prScreen";
+import { useGetUserStatsQuery } from "@/features/api";
 
 const perfomanceOptions = [
   { title: "Volume" },
@@ -9,9 +15,16 @@ const perfomanceOptions = [
   { title: "Body" },
 ];
 export default function statistics() {
+  //STATES
   const [isActive, setIsActive] = useState("Volume");
+
+  //QUERIES
+  const { data: UserStats, isLoading, isError } = useGetUserStatsQuery();
+  console.log("API weekly volume:", UserStats);
+  console.log("API loading:", isLoading);
+  console.log("API error:", isError);
   return (
-    <SafeAreaView className="flex-1 bg-background px-5 pt-5">
+    <SafeAreaView className="flex-1 bg-background px-5 pb-[50px] pt-5">
       {/* header */}
       <View>
         <Text className="text-center text-white">Progress</Text>
@@ -35,29 +48,26 @@ export default function statistics() {
       </View>
 
       {/* stats section */}
-      <View className="mt-4 flex-row items-center justify-center gap-2">
-        {/* workouts */}
-        <View className="h-[110px] w-[110px] items-center justify-center gap-2 rounded-3xl rounded-3xl bg-muted/10">
-          <Text className=" text-muted-2">Workouts</Text>
-          <Text className="text-lg font-bold text-white">3</Text>
-          <Text className="text-sm text-muted-2">Total workouts</Text>
-        </View>
-        {/* time */}
-        <View className="h-[110px] w-[110px] items-center  justify-center  gap-2 rounded-3xl bg-muted/10 px-4 py-3">
-          <Text className=" text-muted-2">Time</Text>
-          <Text className="text-lg font-bold text-white">2h 24m</Text>
-          <Text className="text-sm text-muted-2">Activity Log</Text>
-        </View>
-        {/* volume lifted */}
-        <View className="rounded- h-[110px] w-[110px]  items-center  justify-center gap-2 rounded-3xl bg-muted/10 px-4 py-3">
-          <Text className=" text-muted-2">Volume</Text>
-          <Text className="text-lg font-bold text-white">3</Text>
-          <Text className="text-sm text-muted-2">Total Lifted</Text>
-        </View>
-      </View>
 
-      {/* weight distribution graph */}
-      {/* header */}
+      {/* volume page */}
+      <View className="mt-5 flex-1">
+        {isActive === "Volume" && (
+          <VolumeScreen
+            weeklyVolume={UserStats?.totalWeeklyVolume}
+            isLoading={isLoading}
+            isError={isError}
+          />
+        )}
+
+        {/* muscle screen */}
+        {isActive === "Muscle" && <MuscleScreen />}
+
+        {/* PRs screen */}
+        {isActive === "PRs" && <PrScreen />}
+
+        {/* ?body screen */}
+        {isActive === "Body" && <BodyScreen />}
+      </View>
     </SafeAreaView>
   );
 }

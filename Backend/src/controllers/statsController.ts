@@ -15,6 +15,23 @@ import {
 } from "../db/schema";
 import { auth } from "../lib/auth";
 
+//get start of the week function.
+const getJohannesburgWeekStart = (date: Date) => {
+  const johhanessburgNow = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+
+  const currentDay = johhanessburgNow.getUTCDay();
+
+  const daysSinceMonday = (currentDay + 6) % 7;
+
+  const mondayUtc = Date.UTC(
+    johhanessburgNow.getUTCFullYear(),
+    johhanessburgNow.getUTCMonth(),
+    johhanessburgNow.getUTCDate() - daysSinceMonday
+  );
+
+  return new Date(mondayUtc - 2 * 60 * 60 * 1000);
+};
+
 export const getUserStats = async (req: Request, res: Response) => {
   try {
     //check user authentication
@@ -37,6 +54,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       peformanceMatrics,
       totalWeeklyVolume,
       userProfile,
+      weeklyMuscleSets,
     ] = await Promise.all([
       calculateTotalWorkouts(userId),
       calculatedExerciseBreakdown(userId),
@@ -45,6 +63,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       calculatePerformanceMetrics(userId),
       calculateWeeklyVolume(userId),
       getUserProfile(userId),
+      calculateWeeklyMuscleSets(userId),
     ]);
 
     const stats = {
@@ -57,6 +76,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       recentActivity,
       peformanceMatrics,
       totalWeeklyVolume,
+      weeklyMuscleSets,
     };
 
     return res.status(200).json({ success: true, stats });
@@ -96,12 +116,34 @@ const calculateCompletedSessions = async (userId: string) => {
 
 //fetch exercise breakdown - user to know which muscles are neglected.
 const calculatedExerciseBreakdown = async (userId: string) => {
+  //1 find current week days boundary.
+
+  const now = new Date();
+
+  //find jhb calendar date.
+  const johhanessburgNow = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
+  //find jhb day in index form
+  const currentDay = johhanessburgNow.getUTCDay();
+  const daysSinceMonday = (currentDay + 6) % 7;
+
+  const mondayUtc = Date.UTC(
+    johhanessburgNow.getFullYear(),
+    johhanessburgNow.getUTCMonth(),
+    johhanessburgNow.getUTCDate() - daysSinceMonday
+  );
+
+  const weekStart = new Date(mondayUtc - 2 * 60 * 60 * 1000);
+
+  const nextWeekStart = new Date(
+    mondayUtc + 7 * 24 * 60 * 60 * 1000 - 2 * 60 * 60 * 1000
+  );
+
   //fetch all workoutsession sets.
   const breakdown = await db
     .select({
       muscle: exercises.muscle,
-      exerciseName: exercises.name,
-      count: count(),
+      totalSets: count(),
     })
     .from(workoutSessionSets)
     .innerJoin(
@@ -109,10 +151,43 @@ const calculatedExerciseBreakdown = async (userId: string) => {
       eq(workoutSessionSets.sessionId, workoutSession.id)
     )
     .innerJoin(exercises, eq(workoutSessionSets.exerciseId, exercises.id))
-    .where(eq(workoutSession.userId, userId))
-    .groupBy(exercises.muscle, exercises.name);
+    .where(
+      and(
+        eq(workoutSession.userId, userId),
+        gte(workoutSession.completedAt, weekStart),
+        lt(workoutSession.completedAt, nextWeekStart)
+      )
+    )
+    .groupBy(exercises.muscle);
 
-  return breakdown;
+  //calulate total sets.(weekly)
+  const totalSets = breakdown.reduce((total, item) => {
+    return total + item.totalSets;
+  }, 0);
+
+  //find each muscle sets distribution.
+  const muscleDistribution = breakdown.map((item) => {
+    const sets = Number(item.totalSets);
+
+    const percentage = Number((sets / totalSets) * 100).toFixed();
+
+    return {
+      muscle: item.muscle,
+      sets: item.totalSets,
+      percentage,
+    };
+  });
+
+  return {
+    weekStart: new Date(mondayUtc).toISOString().slice(0, 10),
+
+    weekEndExclusive: new Date(mondayUtc + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10),
+
+    totalSets,
+    muscleDistribution,
+  };
 };
 
 //recent user activity. - the recent workout.
@@ -289,4 +364,62 @@ const calculateWeeklyVolume = async (userId: string) => {
     totalWeeklyVolume: totalVolume,
     dailyVolumes,
   };
+};
+
+//FETCH TOTAL MUSCLE WEEKLY SETS.
+const calculateWeeklyMuscleSets = async (userId: string) => {
+  const now = new Date();
+
+  const JohannesburgNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+  const currentDay = JohannesburgNow.getUTCDay();
+
+  const daysSinceMonday = (currentDay + 6) % 7;
+
+  const mondayUtc = Date.UTC(
+    JohannesburgNow.getFullYear(),
+    JohannesburgNow.getMonth(),
+    JohannesburgNow.getDate() - daysSinceMonday
+  );
+
+  const currentWeekStart = new Date(mondayUtc - 2 * 60 * 60 * 1000);
+
+  //use the current monday of the week to find the previous 7 weeks
+  const historyStart = new Date(
+    currentWeekStart.getTime() - 7 * 7 * 24 * 60 * 60 * 1000
+  );
+
+  const historyEnd = new Date(
+    currentWeekStart.getTime() + 7 * 24 * 60 * 60 * 1000
+  );
+  const weekStart = sql<string>`to_char(date_trunc( 'week', ${workoutSession.completedAt} AT TIME ZONE 'Africa/johannesburg'), 'YYYY-MM-DD')`;
+
+  const results = await db
+    .select({
+      weekStart,
+      muscle: exercises.muscle,
+      sets: count(),
+    })
+    .from(workoutSessionSets)
+    .innerJoin(
+      workoutSession,
+      eq(workoutSessionSets.sessionId, workoutSession.id)
+    )
+    .innerJoin(exercises, eq(workoutSessionSets.exerciseId, exercises.id))
+    .where(
+      and(
+        eq(workoutSession.userId, userId),
+        gte(workoutSession.completedAt, historyStart),
+        lt(workoutSession.completedAt, historyEnd)
+      )
+    )
+    .groupBy(weekStart, exercises.muscle)
+    .orderBy(weekStart);
+
+  //return an array.
+  return results.map((item) => ({
+    weekStart: item.weekStart,
+    muscle: item.muscle,
+    sets: item.sets,
+  }));
 };

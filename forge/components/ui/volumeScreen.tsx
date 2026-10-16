@@ -47,8 +47,6 @@ export default function VolumeScreen({
     };
   });
 
-  console.log("completed sessions:", completedWorkouts?.[0].sets);
-
   //for loading sessions
   const dataRendar = () => {
     if (sessionsLoading) {
@@ -241,7 +239,7 @@ export default function VolumeScreen({
       renderItem={({ item }) => {
         console.log("here is the item", item);
 
-        const totalVolume = (item?.sets).reduce((total, set) => {
+        const totalVolume = (item?.sets ?? []).reduce((total, set) => {
           return total + set.reps * set.weight;
         }, 0);
         return (

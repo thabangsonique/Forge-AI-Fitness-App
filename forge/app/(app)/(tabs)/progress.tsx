@@ -19,10 +19,16 @@ export default function statistics() {
   const [isActive, setIsActive] = useState("Volume");
 
   //QUERIES
-  const { data: UserStats, isLoading, isError } = useGetUserStatsQuery();
-  console.log("API weekly volume:", UserStats);
-  console.log("API loading:", isLoading);
-  console.log("API error:", isError);
+  const {
+    data: UserStats,
+    isLoading,
+    isError,
+    isSuccess,
+    isUninitialized,
+    status,
+  } = useGetUserStatsQuery();
+
+  console.log("user stats:", UserStats?.exerciseBreakedown);
   return (
     <SafeAreaView className="flex-1 bg-background px-5 pb-[50px] pt-5">
       {/* header */}
@@ -60,7 +66,13 @@ export default function statistics() {
         )}
 
         {/* muscle screen */}
-        {isActive === "Muscle" && <MuscleScreen />}
+        {isActive === "Muscle" && (
+          <MuscleScreen
+            muscleStats={UserStats?.exerciseBreakedown}
+            isLoading={isLoading}
+            isError={isError}
+          />
+        )}
 
         {/* PRs screen */}
         {isActive === "PRs" && <PrScreen />}

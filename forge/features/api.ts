@@ -131,16 +131,30 @@ export interface UserStats {
     userProfile: UserProfile;
   };
 
-  exerciseBreakdown: ExerciseBreakdown;
+  exerciseBreakedown: ExerciseBreakedown;
   recentActivity: RecentActivity;
   peformanceMatrics: PerformanceMetrics;
   totalWeeklyVolume: TotalWeeklyVolume;
+  weeklyMuscleSets: WeeklyMuscleSets[];
 }
 
-export interface ExerciseBreakdown {
+export interface ExerciseBreakedown {
+  weekStart: Date;
+  weekEndExclusive: Date;
+  totalSets: number;
+  muscleDistribution: MuscleDistribution[];
+}
+
+export interface MuscleDistribution {
   muscle: string;
-  exerciseName: string;
-  count: number;
+  sets: number;
+  percentage: number;
+}
+
+export interface WeeklyMuscleSets {
+  weekStart: string;
+  muscle: string;
+  sets: number;
 }
 
 export interface CompletedSession {
@@ -377,8 +391,9 @@ export const api = createApi({
     //GET USER STATS.
     getUserStats: build.query<UserStats, void>({
       query: () => "/api/performance/stats",
+
       transformResponse: (response: { success: true; stats: UserStats }) => {
-        return response.stats;
+        return response?.stats;
       },
 
       providesTags: ["Progress"],

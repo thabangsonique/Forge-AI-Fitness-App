@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import BodyScreen from "@/components/ui/bodyScreen";
 import MuscleScreen from "@/components/ui/muscleScreen";
 import PrScreen from "@/components/ui/prScreen";
 import { useGetUserStatsQuery } from "@/features/api";
@@ -12,7 +11,6 @@ const perfomanceOptions = [
   { title: "Volume" },
   { title: "Muscle" },
   { title: "PRs" },
-  { title: "Body" },
 ];
 export default function statistics() {
   //STATES
@@ -76,9 +74,6 @@ export default function statistics() {
 
         {/* PRs screen */}
         {isActive === "PRs" && <PrScreen />}
-
-        {/* ?body screen */}
-        {isActive === "Body" && <BodyScreen />}
       </View>
     </SafeAreaView>
   );

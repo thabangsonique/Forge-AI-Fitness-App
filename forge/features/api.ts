@@ -136,6 +136,7 @@ export interface UserStats {
   peformanceMatrics: PerformanceMetrics;
   totalWeeklyVolume: TotalWeeklyVolume;
   weeklyMuscleSets: WeeklyMuscleSets[];
+  muscleStrength: MuscleStrength[];
 }
 
 export interface ExerciseBreakedown {
@@ -191,6 +192,13 @@ export interface TotalWeeklyVolume {
 export interface DailyVolumes {
   date: string;
   volume: number;
+}
+
+export interface MuscleStrength {
+  weekStart: string;
+  weekLabel: string;
+  muscle: string;
+  best1RM: number;
 }
 
 export const api = createApi({

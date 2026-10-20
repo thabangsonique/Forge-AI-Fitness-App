@@ -3,7 +3,7 @@
 //-total workout time.(sum of all workout sessions) - DONE
 //-average workout duration.(calculated from the total workout time) - DONE
 import { fromNodeHeaders } from "better-auth/node";
-import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, max, sql } from "drizzle-orm";
 import { Request, Response } from "express";
 import { db } from "../db";
 import {
@@ -32,6 +32,14 @@ const getJohannesburgWeekStart = (date: Date) => {
   return new Date(mondayUtc - 2 * 60 * 60 * 1000);
 };
 
+const formatAsJohannesburgDateString = (date: Date): string => {
+  const johannesburgTime = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+  const year = johannesburgTime.getUTCFullYear();
+  const month = String(johannesburgTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(johannesburgTime.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export const getUserStats = async (req: Request, res: Response) => {
   try {
     //check user authentication
@@ -55,6 +63,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       totalWeeklyVolume,
       userProfile,
       weeklyMuscleSets,
+      muscleStrength,
     ] = await Promise.all([
       calculateTotalWorkouts(userId),
       calculatedExerciseBreakdown(userId),
@@ -64,6 +73,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       calculateWeeklyVolume(userId),
       getUserProfile(userId),
       calculateWeeklyMuscleSets(userId),
+      calculateMuscleStrength(userId),
     ]);
 
     const stats = {
@@ -77,6 +87,7 @@ export const getUserStats = async (req: Request, res: Response) => {
       peformanceMatrics,
       totalWeeklyVolume,
       weeklyMuscleSets,
+      muscleStrength,
     };
 
     return res.status(200).json({ success: true, stats });
@@ -422,4 +433,83 @@ const calculateWeeklyMuscleSets = async (userId: string) => {
     muscle: item.muscle,
     sets: item.sets,
   }));
+};
+
+const calculateMuscleStrength = async (userId: string) => {
+  const now = new Date();
+
+  //monday of the current week
+  const currentWeekMonday = getJohannesburgWeekStart(now);
+
+  //find monday of 6 weeks back
+  const historyStart = new Date(
+    currentWeekMonday.getTime() - 6 * 7 * 24 * 60 * 60 * 1000
+  );
+
+  const historyEnd = new Date(
+    currentWeekMonday.getTime() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  const weekStartSql = sql<string>`to_char(date_trunc('week', ${workoutSession.completedAt} AT TIME ZONE 'Africa/johannesburg'), 'YYYY-MM-DD')`;
+
+  const estimated1RM = sql<number>`
+    COALESCE(${workoutSessionSets.weight}, 0) *
+    (1 + (${workoutSessionSets.reps}::numeric / 30))
+  `;
+
+  const result = await db
+    .select({
+      weekStart: weekStartSql,
+      muscle: exercises.muscle,
+      best1RM: max(estimated1RM),
+    })
+    .from(workoutSessionSets)
+    .innerJoin(
+      workoutSession,
+      eq(workoutSessionSets.sessionId, workoutSession.id)
+    )
+    .innerJoin(exercises, eq(workoutSessionSets.exerciseId, exercises.id))
+    .where(
+      and(
+        eq(workoutSession.userId, userId),
+        gte(workoutSession.completedAt, historyStart),
+        lt(workoutSession.completedAt, historyEnd)
+      )
+    )
+    .groupBy(weekStartSql, exercises.muscle)
+    .orderBy(weekStartSql);
+
+  //all the 7 weeks.
+  const weekSkeleton = Array.from({ length: 7 }, (_, index) => {
+    const mondayOfWeek = new Date(
+      historyStart.getTime() + index * 7 * 24 * 60 * 60 * 1000
+    );
+
+    return {
+      weekStart: mondayOfWeek,
+      label: `W${index + 1}`,
+    };
+  });
+
+  //array of muscles trained
+  const muscleTrained = Array.from(new Set(result.map((row) => row.muscle)));
+
+  const fullMatrix = muscleTrained.flatMap((muscle) =>
+    weekSkeleton.map((week) => {
+      const weekStartString = formatAsJohannesburgDateString(week.weekStart);
+      const matchingRow = result.find(
+        (row) => row.muscle === muscle && row.weekStart === weekStartString
+      );
+
+      return {
+        weekStart: week.weekStart,
+        weekLabel: week.label,
+        muscle,
+        best1RM: matchingRow?.best1RM
+          ? Math.round(Number(matchingRow.best1RM) * 10) / 10
+          : 0,
+      };
+    })
+  );
+  return fullMatrix;
 };

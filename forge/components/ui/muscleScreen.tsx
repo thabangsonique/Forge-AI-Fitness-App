@@ -16,6 +16,7 @@ import {
 import { ScrollView } from "react-native-gesture-handler";
 import MuscleHypertrophy from "./graphs/muscleHypertrophy";
 import MusclePieChart from "./graphs/musclePieChart";
+import MuscleStrength from "./graphs/muscleStrength";
 
 const muscleGroups = [
   { id: "all", name: "All" },
@@ -252,8 +253,15 @@ export default function MuscleScreen({
         </View>
 
         {/* MUSCLE STRENGTH PROGRESSION */}
+        <View className="mt-5">
+          <MuscleStrength isActive={isActive} />
+        </View>
 
         {/* AI INSIGHT */}
+        <Text className="mt-5 font-bold text-white">AI Insight</Text>
+        <View className="mt-2 rounded-3xl border border-muted/20 px-4 py-3">
+          <Text className="text-white">AI Insight</Text>
+        </View>
       </ScrollView>
     </View>
   );

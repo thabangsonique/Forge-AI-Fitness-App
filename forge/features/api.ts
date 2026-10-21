@@ -1,4 +1,9 @@
 import { authClient } from "@/lib/auth-client";
+import type {
+  PersonalRecord,
+  PersonalRecordHero,
+  PersonalRecordsResponse,
+} from "@/shared/types";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 export interface UserProfile {
@@ -223,6 +228,7 @@ export const api = createApi({
     "Workouts",
     "Exercises",
     "Progress",
+    "Records",
   ],
 
   endpoints: (build) => ({
@@ -406,6 +412,25 @@ export const api = createApi({
 
       providesTags: ["Progress"],
     }),
+
+    //get user PR stats
+    getPersonalRecords: build.query<PersonalRecordsResponse, void>({
+      query: () => `/api/records`,
+
+      transformResponse: (response: {
+        success: true;
+        hero: PersonalRecordHero;
+        records: PersonalRecord[];
+      }) => {
+        return {
+          hero: response.hero,
+          records: response.records,
+          success: response.success,
+        };
+      },
+
+      providesTags: ["Records"],
+    }),
   }),
 });
 
@@ -419,4 +444,5 @@ export const {
   useCreateWorkoutMutation,
   useCreateWorkoutSessionMutation,
   useGetUserStatsQuery,
+  useGetPersonalRecordsQuery,
 } = api;

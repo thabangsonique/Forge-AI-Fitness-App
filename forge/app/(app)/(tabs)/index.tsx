@@ -380,7 +380,7 @@ export default function index() {
         </View>
 
         {/* My activity */}
-        <Text className="mt-9 text-white">My Activity</Text>
+        <Text className="mt-5 text-white">My Activity</Text>
         <View className="mt-5 flex-row items-center justify-between rounded-3xl bg-muted/10 px-5 py-4">
           <View className="flex-1 items-center justify-center gap-3">
             <View className="rounded-full bg-primary/10 p-2">
@@ -409,7 +409,7 @@ export default function index() {
         </View>
 
         {/* SECTION-quick actions */}
-        <Text className="text-md mb-3 mt-9 text-muted-2">Quick Actions</Text>
+        <Text className="text-md mb-3 mt-5 text-muted-2">Quick Actions</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -79,18 +79,22 @@ export default function ExercisePR() {
           {/* card 1 */}
           <View className="gap-2 rounded-3xl border border-primary/10 bg-muted/5 px-4 py-3">
             <Text className="text-white">Estimated 1RM</Text>
-            <Text className="text-xl text-primary">101.3 kg</Text>
+            <Text className="text-xl text-primary">
+              {exerciseRecords?.currentPR} kg
+            </Text>
             <View className="rounded-full bg-primary px-3 py-2">
               <Text>Current PR</Text>
             </View>
           </View>
           {/* card 2 */}
           <View className="gap-2 rounded-3xl border border-primary/10 bg-muted/5 px-4 py-3">
-            <Text className="text-white">Estimated 1RM</Text>
-            <Text className="text-xl text-primary">101.3 kg</Text>
-            <View className="rounded-full bg-primary px-3 py-2">
-              <Text>Current PR</Text>
-            </View>
+            <Text className="text-white">Heaviest set</Text>
+            <Text className="text-xl text-white">
+              {exerciseRecords?.prReps} x {exerciseRecords?.prWeight} kg
+            </Text>
+            <Text className="text-muted/70">
+              (1RM {exerciseRecords?.currentPR} kg)
+            </Text>
           </View>
         </View>
         {/* graph */}

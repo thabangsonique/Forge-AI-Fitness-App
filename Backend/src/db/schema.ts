@@ -135,6 +135,7 @@ export const exercises = pgTable("exercises", {
   forceType: text(),
   mechanics: text(),
   category: text().notNull(),
+  image: text(),
 });
 
 //table linking workouts to exercises.-workout creation joining table.

@@ -149,7 +149,7 @@ export const getWorkoutSessionHistory = async (req: Request, res: Response) => {
 
     const workoutsessionsWithSets = userSessions.map((ws) => ({
       ...ws,
-      sets: setsBySessionId.get(ws.id),
+      sets: setsBySessionId.get(ws.id) ?? [],
     }));
 
     return res

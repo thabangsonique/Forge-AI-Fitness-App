@@ -44,14 +44,16 @@ export default function CompleteSession() {
   // FIND THE COMPLETED SESSION
   const completedSession = sessionHistory?.find((ws) => ws.workoutId === id);
 
+  // GUARD AGAINST undefined sets — a session with no logged sets has sets: undefined
+  const completedSets = completedSession?.sets ?? [];
+
   // GET EXERCISES AND THEIR COMPLETED SETS
   const completedExercise =
     workout?.exercises
       .map((exercise) => {
-        const performedSets =
-          completedSession?.sets.filter(
-            (set) => set.exerciseId === exercise.id
-          ) ?? [];
+        const performedSets = completedSets.filter(
+          (set) => set.exerciseId === exercise.id
+        );
 
         return {
           ...exercise,
@@ -61,10 +63,9 @@ export default function CompleteSession() {
       .filter((exercise) => exercise.completedSets.length > 0) ?? [];
 
   // CALCULATE TOTAL VOLUME
-  const totalVolume =
-    completedSession?.sets.reduce((total, set) => {
-      return total + set.weight * set.reps;
-    }, 0) ?? 0;
+  const totalVolume = completedSets.reduce((total, set) => {
+    return total + set.weight * set.reps;
+  }, 0);
 
   return (
     <ImageBackground source={bgImg} className="flex-1" resizeMode="cover">
@@ -155,7 +156,7 @@ export default function CompleteSession() {
             {/* SETS */}
             <View className="flex-1">
               <Text className="text-xl font-bold text-primary">
-                {completedSession?.sets.length ?? 0}
+                {completedSets.length ?? 0}
                 <Text className="text-white"> / {workout?.totalSets ?? 0}</Text>
               </Text>
               <Text className="text-muted-2/50">Sets</Text>

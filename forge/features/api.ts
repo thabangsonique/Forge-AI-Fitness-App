@@ -59,7 +59,8 @@ export interface Exercise {
   forceType: string | null;
   mechanics: string | null;
   category: string | null;
-
+  exerciseCategory?: string | null;
+  image: string | null;
   position: number;
   sets: number;
   reps: number;
@@ -93,7 +94,7 @@ export interface Workout {
   id: string;
   name: string;
   description: string | null;
-  image: string;
+  image: string | null;
   workoutCategory: string;
   workoutType: string;
   exercises: Exercise[];

@@ -1,11 +1,13 @@
+import AlertModal from "@/components/ui/modals/alertModal";
 import {
   useCreateWorkoutSessionMutation,
   useGetAllWorkoutsQuery,
 } from "@/features/api";
+import { formatElapsedTime } from "@/utils/formatDuration";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -15,6 +17,7 @@ import {
   ToastAndroid,
   View,
 } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -54,13 +57,66 @@ export default function live() {
 
   const workout = allWorkouts?.find((w) => w.id === id);
 
+  console.log("exercise images", workout?.exercises);
+
   //STATES
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [sets, setSets] = useState<WorkoutSets>({});
-
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [restSecondsRemaining, setRestSecondsRemaining] = useState(0);
+  const [activeRest, setActiveRest] = useState<{
+    exerciseId: string;
+    setIndex: number;
+  } | null>(null);
+  const [isRestPaused, setIsRestPaused] = useState(false);
+  const repsRefs = useRef<{ [key: string]: TextInput | null }>({});
+  const exerciseCarouselRef = useRef<ScrollView>(null);
+  const [restDuration, setRestDuration] = useState(0);
   const [selected, setSelected] = useState("");
   const [startedAt] = useState(new Date().toISOString());
   const [completedAt] = useState(new Date().toISOString());
+  const [incompleteAlert, setIncompleteAlert] = useState(false);
+
+  //TIMER SCROLLVIEW
+  const scrollViewRef = useRef<KeyboardAwareScrollView>(null);
+
+  //EXERCISE IMAGE SCROLLVIEW
+  useEffect(() => {
+    const thumbnailWidth = 72;
+    const gap = 12;
+
+    exerciseCarouselRef.current?.scrollTo({
+      x: Math.max(0, currentExerciseIndex * (thumbnailWidth + gap)),
+      animated: true,
+    });
+  }, [currentExerciseIndex]);
+
+  //CALCULATE WORKOUT TIMER
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const started = new Date(startedAt).getTime();
+      const diffInSecconds = Math.floor((now - started) / 1000);
+
+      setElapsedSeconds(diffInSecconds);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  //rest set timer
+  useEffect(() => {
+    if (!activeRest || restSecondsRemaining <= 0) {
+      return; // dont start timer
+    }
+
+    //starting the timer
+    const interval = setInterval(() => {
+      setRestSecondsRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeRest, restSecondsRemaining]);
 
   //QUERIES.
   const [createWorkoutSession, { isLoading: creatingSession }] =
@@ -76,24 +132,86 @@ export default function live() {
   const currentExercise = workout?.exercises[currentExerciseIndex];
 
   //function to toggle status.
-  const toggleCompleSet = (exerciseId: string, setIndex: number) => {
+  const handleCompletedSet = (exerciseId: string, setIndex: number) => {
+    //check if set already comopleted.
+
+    //fetch current set we are resting from.
+    const currentSet = sets[exerciseId]?.[setIndex];
+
+    if (currentSet?.completed) {
+      setSets((current) => ({
+        ...current,
+        [exerciseId]: {
+          ...current[exerciseId],
+          [setIndex]: {
+            ...current[exerciseId]?.[setIndex],
+            completed: false,
+          },
+        },
+      }));
+
+      // reset rest timer
+      if (
+        activeRest?.exerciseId === exerciseId &&
+        activeRest?.setIndex === setIndex
+      ) {
+        setActiveRest(null);
+        setRestSecondsRemaining(0);
+        setRestDuration(0);
+      }
+      return;
+    }
+
+    //fetch exercise for restSeconds info
+    const exercise = workout?.exercises.find((ex) => ex.id === exerciseId);
+
+    if (!exercise) {
+      return;
+    }
+
+    //fetch weight and reps values.
+    const weight = currentSet?.weight?.trim() ?? "";
+    const reps = currentSet?.reps?.trim() ?? "";
+
+    if (restSecondsRemaining > 0) {
+      ToastAndroid.show(
+        "Still resting! Wait it out or hit 'Skip rest' to keep going.",
+        ToastAndroid.LONG
+      );
+    }
+
+    if (!weight || !reps) {
+      ToastAndroid.show(
+        "Enter weight and reps before completing the set.",
+        ToastAndroid.SHORT
+      );
+      return;
+    }
+
+    //set the new set(update the new set)
+
     setSets((current) => ({
-      //protect what already exists.
       ...current,
-      //protect everything about this current exercise
       [exerciseId]: {
         ...current[exerciseId],
-
         [setIndex]: {
-          weight: current[exerciseId]?.[setIndex].weight ?? "",
-          reps: current[exerciseId]?.[setIndex].reps ?? "",
-          completed: !(current[exerciseId]?.[setIndex].completed ?? false),
+          weight,
+          reps,
+          completed: true,
         },
       },
     }));
 
-    console.log("NEW ADDED SET", sets);
+    (setActiveRest({ exerciseId, setIndex }),
+      setRestSecondsRemaining(exercise.restSeconds));
+    setRestDuration(exercise.restSeconds);
   };
+
+  //REST PROGRESS.
+  const restProgress =
+    restDuration > 0
+      ? ((restDuration - restSecondsRemaining) / restDuration) * 100
+      : 0;
 
   const updateSets = (
     exerciseId: string,
@@ -128,7 +246,28 @@ export default function live() {
     }
   };
 
+  //CHECK TOTAL SETS COMPLETED.
+  //Total sets for all exercises.
+  const totalSetsRequired = workout?.exercises.reduce((total, exercise) => {
+    return total + exercise.sets;
+  }, 0);
+
+  const completedSetsCount = Object.values(sets).reduce(
+    (total, exerciseSets) => {
+      const completedInExercise = Object.values(exerciseSets).filter(
+        (setData) => setData.completed
+      ).length;
+      return total + completedInExercise;
+    },
+    0
+  );
   const handleFinishWorkout = async () => {
+    //alert for incompleted sets
+    if (totalSetsRequired !== completedSetsCount) {
+      setIncompleteAlert(true);
+      return;
+    }
+
     const completedAt = new Date().toISOString();
 
     //calculate duration.
@@ -177,9 +316,12 @@ export default function live() {
   };
 
   console.log("ALL SETS", workout?.exercises);
+  ape: console.log(JSON.stringify(workout?.exercises?.[0], null, 2));
+  console.log("exersice image,:", currentExercise?.image);
   return (
-    <SafeAreaView className="flex-1 bg-background pt-5">
+    <SafeAreaView className="flex-1 bg-background pb-5 pt-5">
       <KeyboardAwareScrollView
+        ref={scrollViewRef}
         enableOnAndroid
         keyboardShouldPersistTaps="handled"
         extraScrollHeight={100}
@@ -189,14 +331,30 @@ export default function live() {
         <View className="flex-row items-center justify-between px-5">
           <Text className=" text-white">{workout?.name}</Text>
 
-          <Text className="text-primary">Leave</Text>
+          <Pressable
+            onPress={() => {
+              setSelected("leave");
+              handleFinishWorkout();
+            }}
+            className="rounded-3xl bg-primary/10 px-5 py-3"
+          >
+            <Text className="font-bold text-primary">Leave</Text>
+          </Pressable>
         </View>
-        <Text className="ml-5 mt-4 text-lg text-primary">00:02:46</Text>
+
+        <View className="ml-5 mt-4 flex-row items-center gap-2">
+          <Feather name="clock" size={20} color="#ffffff" />
+          <Text className="text-lg text-white">
+            {formatElapsedTime(elapsedSeconds)}
+          </Text>
+        </View>
 
         {/* image of the exercise */}
         <View className="mt-2 overflow-hidden rounded-3xl">
           <Image
-            source={{ uri: workout?.image }}
+            source={{
+              uri: currentExercise?.image ?? workout?.image ?? undefined,
+            }}
             className=" h-[150px]"
             resizeMode="cover"
           />
@@ -213,21 +371,66 @@ export default function live() {
           </Text>
         </View>
 
+        {/* exercise curosel */}
+        <ScrollView
+          ref={exerciseCarouselRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingVertical: 8,
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          {workout?.exercises.map((exercise, index) => {
+            const isCurrentExercise = index === currentExerciseIndex;
+            const imageUri = exercise.image?.trim();
+
+            return (
+              <View
+                key={exercise.workoutExerciseId ?? exercise.id}
+                className={`${isCurrentExercise ? "border-primary" : "border-transparent"} h-20  w-20 overflow-hidden rounded-3xl border`}
+              >
+                <Image
+                  source={
+                    imageUri
+                      ? { uri: imageUri }
+                      : require("../../../../assets/images/app-images/logo.png")
+                  }
+                  className="h-full w-full"
+                  resizeMode="cover"
+                  onLoad={() => {
+                    console.log("IMAGE LOADED:", exercise.name);
+                  }}
+                  onError={(event) => {
+                    console.log("IMAGE FAILED:", exercise.name);
+                    console.log("IMAGE URL:", JSON.stringify(imageUri));
+                    console.log("IMAGE ERROR:", event.nativeEvent.error);
+                  }}
+                />
+              </View>
+            );
+          })}
+        </ScrollView>
+
         <View className="mt-5 rounded-3xl  px-5">
           {/* exercise header */}
-          <Text className="text-lg font-semibold text-white">
-            {currentExercise?.name}
-          </Text>
-          <View className="mt-2 flex-row">
-            <Text className="text-muted-2/50">
-              {currentExercise?.sets} sets -
+          <View>
+            <Text className="text-lg font-semibold text-white">
+              {currentExercise?.name}
             </Text>
-            <Text className="text-muted-2/50">
-              {currentExercise?.reps} reps -{" "}
-            </Text>
-            <Text className="text-muted-2/50">
-              {currentExercise?.restSeconds}s rest
-            </Text>
+            <View className="mt-2 flex-row">
+              <Text className="text-muted-2/50">
+                {currentExercise?.sets} sets -
+              </Text>
+              <Text className="text-muted-2/50">
+                {currentExercise?.reps} reps -{" "}
+              </Text>
+              <Text className="text-muted-2/50">
+                {currentExercise?.restSeconds}s rest
+              </Text>
+            </View>
           </View>
 
           {/* exercise table */}
@@ -250,34 +453,67 @@ export default function live() {
                 return (
                   <View key={idx} className=" mt-5 flex-row px-8">
                     <Text className="w-[25%] text-white">{idx + 1}</Text>
+                    {/* weight */}
                     <TextInput
                       placeholder="20kg"
                       value={currentSet?.weight ?? ""}
+                      editable={
+                        !currentSet?.completed && restSecondsRemaining === 0
+                      }
                       onChangeText={(value) => {
                         if (exerciseId !== undefined)
                           updateSets(exerciseId, idx, "weight", value);
                       }}
 
                       keyboardType="numeric"
-                      className="mr-[20px] w-[60px] rounded-2xl bg-muted-2/20 text-center text-white placeholder:text-muted-2/50"
+                      returnKeyType="next"
+                      onSubmitEditing={() => {
+                        if (exerciseId !== undefined) {
+                          const key = `${exerciseId}-${idx}`;
+                          repsRefs.current[key]?.focus();
+                        }
+                      }}
+                      className={`mr-[20px] w-[60px] rounded-2xl text-center text-white ${
+                        currentSet?.completed || restSecondsRemaining > 0
+                          ? "bg-muted-2/10 opacity-40"
+                          : "bg-muted-2/20"
+                      }`}
                       selectionColor="#dae86aff"
                     />
+                    {/* reps */}
                     <TextInput
+                      ref={(el) => {
+                        if (exerciseId !== undefined) {
+                          repsRefs.current[`${exerciseId}-${idx}`] = el;
+                        }
+                      }}
                       placeholder="20kg"
                       value={currentSet?.reps ?? ""}
+                      editable={
+                        !currentSet?.completed && restSecondsRemaining === 0
+                      }
                       onChangeText={(value) => {
                         if (exerciseId !== undefined)
                           updateSets(exerciseId, idx, "reps", value);
                       }}
                       keyboardType="numeric"
-                      className="mr-[30px] w-[60px] rounded-2xl  bg-muted-2/20 text-center text-white placeholder:text-muted-2/50"
+                      returnKeyType="done"
+                      onSubmitEditing={() => {
+                        if (exerciseId !== undefined)
+                          handleCompletedSet(exerciseId, idx);
+                      }}
+                      className={`mr-[20px] w-[60px] rounded-2xl text-center text-white ${
+                        currentSet?.completed || restSecondsRemaining > 0
+                          ? "bg-muted-2/10 opacity-40"
+                          : "bg-muted-2/20"
+                      }`}
                       selectionColor="#dae86aff"
                     />
                     {/* status */}
                     <Pressable
                       onPress={() => {
                         if (!exerciseId) return;
-                        toggleCompleSet(exerciseId, idx);
+                        handleCompletedSet(exerciseId, idx);
                       }}
                       className={` ${currentSet?.completed ? "border-transparent bg-primary " : "border border-muted-2"} h-8 w-8 items-center justify-center rounded-full `}
                     >
@@ -291,6 +527,80 @@ export default function live() {
             )}
           </View>
         </View>
+
+        {/* //REST TIMER */}
+
+        {restSecondsRemaining > 0 && (
+          <View
+            onLayout={(event) => {
+              const { y } = event.nativeEvent.layout;
+
+              scrollViewRef.current?.scrollToPosition(
+                0,
+                Math.max(0, y - 30),
+                true
+              );
+            }}
+            className="mx-5 mt-5 rounded-3xl border border-primary/10 px-4 py-4"
+          >
+            {/* Header */}
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Text className="text-muted/70">REST TIMER</Text>
+
+                <Text className="mt-1 text-white">
+                  {restSecondsRemaining > 0
+                    ? "Recover for your next set"
+                    : "Rest complete"}
+                </Text>
+              </View>
+
+              {/* Icon */}
+              <View className="h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                <Feather name="clock" size={20} color="#dae86aff" />
+              </View>
+            </View>
+
+            {/* Countdown */}
+            <View className="mt-5 items-center justify-center">
+              <Text className="text-4xl font-bold text-white">
+                {formatElapsedTime(restSecondsRemaining)}
+              </Text>
+
+              <Text className="mt-1 text-muted/70">Remaining</Text>
+            </View>
+
+            {/* Progress bar */}
+            <View className="mt-5 h-2 overflow-hidden rounded-full bg-muted-2/20">
+              <View
+                style={{ width: `${restProgress}%` }}
+                className="h-full rounded-full bg-primary"
+              />
+            </View>
+
+            {/* Timer controls */}
+            <View className="mt-5 flex-row gap-3">
+              <Pressable
+                onPress={() => {
+                  setActiveRest(null);
+                  setRestSecondsRemaining(0);
+                  setRestDuration(0);
+                }}
+                className="h-11 flex-1 flex-row items-center justify-center gap-2 rounded-full border border-primary/30"
+              >
+                <Feather
+                  name={restSecondsRemaining > 0 ? "skip-forward" : "check"}
+                  size={16}
+                  color="#dae86aff"
+                />
+
+                <Text className="font-semibold text-white">
+                  {restSecondsRemaining > 0 ? "Skip rest" : "Done"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         {/* Next + Prev section */}
         <View className="mt-4 flex-row items-center justify-between px-5">
@@ -341,6 +651,19 @@ export default function live() {
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
+
+      {/* MODAL DISPLAY */}
+      {incompleteAlert && (
+        <AlertModal
+          visible={incompleteAlert}
+          setIncompleteAlert={setIncompleteAlert}
+          totalSetsRequired={totalSetsRequired}
+          completedSetsCount={completedSetsCount}
+          handleFinishWorkout={handleFinishWorkout}
+          selected={selected}
+          setSelected={setSelected}
+        />
+      )}
     </SafeAreaView>
   );
 }

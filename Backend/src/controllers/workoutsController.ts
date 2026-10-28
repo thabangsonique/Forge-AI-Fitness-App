@@ -148,6 +148,7 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
         exerciseId: exercises.id,
         exerciseName: exercises.name,
         exerciseDescription: exercises.description,
+        exerciseImage: exercises.image,
         muscle: exercises.muscle,
         equipment: exercises.equipment,
         difficulty: exercises.difficulty,
@@ -215,6 +216,7 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
             forceType: row.forceType,
             mechanics: row.mechanics,
             exerciseCategory: row.exerciseCategory,
+            image: row.exerciseImage,
 
             position: row.position,
             sets: row.sets,
@@ -335,6 +337,7 @@ export const getWorkoutsBySearch = async (req: Request, res: Response) => {
         exerciseId: exercises.id,
         exerciseName: exercises.name,
         exerciseDescription: exercises.description,
+        exerciseImage: exercises.image,
         muscle: exercises.muscle,
         equipment: exercises.equipment,
         difficulty: exercises.difficulty,
@@ -377,6 +380,7 @@ export const getWorkoutsBySearch = async (req: Request, res: Response) => {
           difficulty: row.difficulty,
           mechanics: row.mechanics,
           category: row.category,
+          image: row.exerciseImage,
         });
 
         acc[row.workoutId].exerciseCount += 1;

@@ -22,7 +22,8 @@ export default function Workout() {
   const { data: allWorkouts, isLoading } = useGetAllWorkoutsQuery();
 
   const workout = allWorkouts?.find((w) => w.id === id);
-  console.log("RESULTS", workout);
+  console.log("RESULTS", JSON.stringify(workout, null, 2));
+
   if (isLoading) {
     <SafeAreaView className="flex-1 items-center justify-center">
       <ActivityIndicator />
@@ -34,7 +35,11 @@ export default function Workout() {
       {/* image container */}
       <View className="relative overflow-hidden ">
         <Image
-          source={{ uri: workout?.image }}
+          source={
+            workout?.image?.trim()
+              ? { uri: workout?.image.trim() }
+              : require("../../../../assets/images/app-images/logo.png")
+          }
           className="h-[300px] w-full"
           resizeMode="cover"
         />
@@ -101,8 +106,17 @@ export default function Workout() {
         renderItem={({ item }) => (
           <View className="flex-row items-center justify-between rounded-3xl border-b-[0.5px] border-muted-2/5 pb-3">
             {/* image */}
+
             <View className="h-[80px] w-[80px] overflow-hidden rounded-2xl bg-muted-2/50">
-              <Text className="text-white">Image Here</Text>
+              <Image
+                source={
+                  item.image?.trim()
+                    ? { uri: item.image.trim() }
+                    : require("../../../../assets/images/app-images/logo.png")
+                }
+                className="h-full w-full"
+                resizeMode="cover"
+              />
             </View>
 
             {/* exercise text */}

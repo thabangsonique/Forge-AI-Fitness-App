@@ -3,6 +3,7 @@ import {
   resetOnboardingAnswers,
 } from "@/constants/onboarding";
 import {
+  useGetAllWorkoutsQuery,
   useGetCompletedSessionsQuery,
   useGetScheduledWorkoutsQuery,
   useGetWorkoutSessionHistoryQuery,
@@ -10,8 +11,9 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+
+import { Href, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,7 +24,13 @@ const legs = require("../../../assets/images/app-images/Legs.png");
 const gBackground = require("../../../assets/images/app-images/gradient.png");
 
 //QUICK ACTIONS.
-const quickActions = [
+type QuickAction = {
+  icon: string;
+  title: string;
+  href: Href;
+};
+
+const quickActions: QuickAction[] = [
   {
     icon: "dumbbell",
     title: "Wokouts",
@@ -36,21 +44,12 @@ const quickActions = [
   {
     icon: "walking",
     title: "Exercises",
-    href: "/(app)/(tabs)/workouts",
+    href: "/exercisePR/exercise-screen",
   },
-  {
-    icon: "apple-alt",
-    title: "Diet",
-    href: "/(app)/(tabs)/workouts",
-  },
+
   {
     icon: "brain",
     title: "AI Coach",
-    href: "/(app)/(tabs)/workouts",
-  },
-  {
-    icon: "stopwatch",
-    title: "Track",
     href: "/(app)/(tabs)/workouts",
   },
 ];
@@ -189,11 +188,48 @@ export default function index() {
     error: isHistoryError,
   } = useGetWorkoutSessionHistoryQuery();
 
+  const {
+    data: allWorkouts,
+    isLoading: workoutsLoading,
+    error: workoutsError,
+  } = useGetAllWorkoutsQuery();
+
+  //FIND SCHEDULED WORKOUT.
+  const nextScheduledWorkout = useMemo(() => {
+    if (!ScheduledWorkouts?.length || !allWorkouts?.length) {
+      return null;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcomingWorkout = ScheduledWorkouts?.map((scheduled) => {
+      const workout = allWorkouts?.find(
+        (item) => item.id === scheduled.workoutId
+      );
+
+      if (!workout) {
+        return null;
+      }
+
+      const scheduledDate = new Date(scheduled.scheduledDate);
+
+      return {
+        ...workout,
+        scheduledDate,
+      };
+    })
+      .filter((item) => item !== null)
+      .filter((item) => item.scheduledDate >= today)
+      .sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime());
+
+    return upcomingWorkout[0] ?? null;
+  }, [ScheduledWorkouts, allWorkouts]);
   //DAY CALENDAR USE EFFECT.
   useEffect(() => {
     console.log("HERE ARE ALL THE SCHEDULED WORKOUTS", ScheduledWorkouts);
-    console.log("HERE ARE ALL THE COMPLETED SESSIONS", completedSessions);
-    console.log("session history:", workoutHistory);
+    // console.log("HERE ARE ALL THE COMPLETED SESSIONS", completedSessions);
+    // console.log("session history:", workoutHistory);
 
     if (!scheduledLoading && !LoadingCompleted) {
       //check for errors.
@@ -308,46 +344,97 @@ export default function index() {
         <Text className="mt-8 text-lg text-muted-2">Next workout</Text>
 
         {/* workout card */}
-        <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
-          <Image source={push} className="h-full w-full" resizeMode="cover" />
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.9)"]}
-            className="absolute inset-0"
-          />
 
-          <View className="absolute bottom-5 left-5 right-5 w-[300px] flex-row items-center">
-            <View>
-              <Text className="text-lg font-semibold text-white">Push Day</Text>
-              <Text className="text-muted-2">Chest - Shoulders - Triceps</Text>
+        {nextScheduledWorkout ? (
+          <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
+            <Image source={push} className="h-full w-full" resizeMode="cover" />
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.9)"]}
+              className="absolute inset-0"
+            />
 
-              <View className="mt-2 flex-row items-center">
-                <Feather name="clock" color="#C7C8BF" size={15} />
-                <Text className="ml-2 text-muted-2"> 45 min</Text>
-                <FontAwesome5
-                  name="dumbbell"
-                  color="#C7C8BF"
-                  size={15}
-                  className="ml-4"
-                />
-                <Text className="ml-2 text-muted-2"> 320 kcal</Text>
+            <View className="absolute bottom-5 left-5 right-5 w-[300px] flex-row items-center">
+              <View>
+                <Text className="text-lg font-semibold text-white">
+                  Push Day
+                </Text>
+                <Text className="text-muted-2">
+                  Chest - Shoulders - Triceps
+                </Text>
+
+                <View className="mt-2 flex-row items-center">
+                  <Feather name="clock" color="#C7C8BF" size={15} />
+                  <Text className="ml-2 text-muted-2"> 45 min</Text>
+                  <FontAwesome5
+                    name="dumbbell"
+                    color="#C7C8BF"
+                    size={15}
+                    className="ml-4"
+                  />
+                  <Text className="ml-2 text-muted-2"> 320 kcal</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          {/* start workout button */}
-          <Pressable
-            className={`absolute bottom-5 right-[30px] h-[50px] w-[50px] items-center justify-center rounded-full bg-primary ${
-              isPressed ? "opacity-60" : "opacity-100"
-            }`}
-            onPressIn={() => {
-              setIsPressed(true);
-              console.log("BUTTON IS PRESSING");
-            }}
-            onPressOut={() => setIsPressed(false)}
-          >
-            <Feather name="chevron-right" color="black" size={23} />
-          </Pressable>
-        </View>
+            {/* start workout button */}
+            <Pressable
+              // onPress={()=> router.push(`/(app)/workouts/${ScheduledWorkouts}`)}
+              className={`absolute bottom-5 right-[30px] h-[50px] w-[50px] items-center justify-center rounded-full bg-primary ${
+                isPressed ? "opacity-60" : "opacity-100"
+              }`}
+              onPressIn={() => {
+                setIsPressed(true);
+                console.log("BUTTON IS PRESSING");
+              }}
+              onPressOut={() => setIsPressed(false)}
+            >
+              <Feather name="chevron-right" color="black" size={23} />
+            </Pressable>
+          </View>
+        ) : (
+          <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-[#1C1D19]">
+            {/* Subtle background decoration */}
+            <LinearGradient
+              colors={["#292B24", "#171813", "#11120F"]}
+              className="absolute inset-0"
+            />
+
+            {/* Decorative circle */}
+            <View className="absolute -right-8 -top-10 h-40 w-40 rounded-full border border-white/5" />
+
+            {/* Card content */}
+            <View className="flex-1 justify-center px-5">
+              <View className="mb-3 h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+                <Feather name="calendar" color="#D8FF00" size={22} />
+              </View>
+
+              <Text className="text-lg font-semibold text-white">
+                No workout scheduled
+              </Text>
+
+              <Text className="mt-1 max-w-[245px] text-sm leading-5 text-muted-2">
+                Plan your next session and stay consistent with your goals.
+              </Text>
+
+              {/* Schedule workout button */}
+              <Pressable
+                onPress={() => router.push("/(app)/(tabs)/create")}
+                className={`mt-3 h-10 flex-row items-center self-start rounded-full bg-primary px-4 ${
+                  isPressed ? "opacity-60" : "opacity-100"
+                }`}
+                onPressIn={() => setIsPressed(true)}
+                onPressOut={() => setIsPressed(false)}
+              >
+                <Text className="mr-2 text-sm font-semibold text-black">
+                  Schedule workout
+                </Text>
+
+                <Feather name="arrow-up-right" color="black" size={16} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* <Pressable onPress={handleLogOut} className="bg-primary p-5">
           <Text>Log out</Text>
         </Pressable> */}

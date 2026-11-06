@@ -2,11 +2,14 @@ import {
   useGetAllWorkoutsQuery,
   useGetScheduledWorkoutsQuery,
   useGetWorkoutsBySearchQuery,
+  Workout,
 } from "@/features/api";
-import { Feather } from "@expo/vector-icons";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { Feather, FontAwesome5 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+
 import {
   FlatList,
   Image,
@@ -15,8 +18,30 @@ import {
   Text,
   TextInput,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const userImage = require("../../../assets/images/app-images/user-profile.png");
+const push = require("../../../assets/images/app-images/push.jpeg");
+const pull = require("../../../assets/images/app-images/pull.png");
+const legs = require("../../../assets/images/app-images/Legs.png");
+const arm = require("../../../assets/images/app-images/arm.png");
+const shoulder = require("../../../assets/images/app-images/shoulder.png");
+const anatomy = require("../../../assets/images/app-images/anatomy.png");
+const logo = require("../../../assets/images/app-images/logo.png");
+const gBackground = require("../../../assets/images/app-images/gradient.png");
+
+const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
+  push: push,
+  pull: pull,
+  arms: arm,
+  legs: legs,
+  shoulders: shoulder,
+  quads: legs,
+  "push-pull": push,
+  "full body": anatomy,
+};
 
 const workoutFilters = [
   "All",
@@ -50,19 +75,6 @@ type Exercise = {
   restSeconds: number;
 };
 
-type Workout = {
-  id: string;
-  name: string;
-  description: string | null;
-  image: string;
-  workoutType: string;
-  exercises: Exercise[];
-  exerciseCount: number;
-  totalSets: number;
-};
-
-const push = require("../../../assets/images/app-images/push.jpeg");
-
 export default function Plan() {
   const [isPressed, setIsPressed] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,15 +99,50 @@ export default function Plan() {
   // API QUERIES
   // --------------------------------------------------
 
-  const { data: scheduledWorkouts } = useGetScheduledWorkoutsQuery();
+  const {
+    data: scheduledWorkouts,
+    refetch: refetchScheduled,
+    isFetching: isFetchingScheduled,
+  } = useGetScheduledWorkoutsQuery();
 
-  const { data: allWorkouts } = useGetAllWorkoutsQuery();
+  const {
+    data: allWorkouts,
+    refetch: refetchAllWorkouts,
+    isFetching: isFetchingWorkouts,
+  } = useGetAllWorkoutsQuery();
 
-  const { data: searchedWorkouts } = useGetWorkoutsBySearchQuery(
+  const {
+    data: searchedWorkouts,
+    refetch: refetchSearch,
+    isFetching: isFetchingSearch,
+  } = useGetWorkoutsBySearchQuery(debouncedSearchTerm, {
+    skip: debouncedSearchTerm.length === 0,
+  });
+
+  //REFETCH HANDLERS.
+  const isRefreshing =
+    isFetchingScheduled || isFetchingWorkouts || isFetchingSearch;
+
+  // user manual refresh
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      refetchAllWorkouts(),
+      refetchScheduled(),
+      ...(debouncedSearchTerm.length > 0 ? [refetchSearch()] : []),
+    ]);
+  }, [
+    refetchAllWorkouts,
+    refetchScheduled,
+    refetchSearch,
     debouncedSearchTerm,
-    {
-      skip: debouncedSearchTerm.length === 0,
-    }
+  ]);
+
+  // tab auto refetch
+  useFocusEffect(
+    useCallback(() => {
+      refetchAllWorkouts();
+      refetchScheduled();
+    }, [refetchAllWorkouts, refetchScheduled])
   );
 
   // --------------------------------------------------
@@ -139,6 +186,22 @@ export default function Plan() {
   // FIND NEXT SCHEDULED WORKOUT
   // --------------------------------------------------
 
+  //NEXT WORKOUT IMAGE.
+  const resolveWorkoutImage = (
+    category?: string | null,
+    image?: string | null
+  ): ImageSourcePropType => {
+    const categoryImage = CATEGORY_IMAGES[category?.trim().toLowerCase() ?? ""];
+
+    if (categoryImage) {
+      return categoryImage;
+    }
+
+    //for system workouts
+    const systemWorkout = image?.trim();
+    return systemWorkout ? { uri: systemWorkout } : logo;
+  };
+
   const getNextWorkout = (
     scheduledWorkouts: ScheduledWorkout[]
   ): Workout | undefined => {
@@ -181,11 +244,11 @@ export default function Plan() {
     return w.workoutType === "system";
   });
 
-  console.log(
-    "HERE ARE ALL THE DEFAULT WORKOUTS",
+  // console.log(
+  //   "HERE ARE ALL THE DEFAULT WORKOUTS",
 
-    defaultWorkouts
-  );
+  //   defaultWorkouts
+  // );
   // --------------------------------------------------
   // HEADER
   // --------------------------------------------------
@@ -197,16 +260,26 @@ export default function Plan() {
         {/* PAGE HEADER */}
         {/* -------------------------------------------- */}
 
-        <View className="flex-row items-center justify-between">
-          <Pressable className="h-10 w-10 items-center justify-center rounded-full">
+        <View className="relative flex-row items-center justify-between">
+          <Pressable
+            onPressIn={() => setIsPressed("home")}
+            onPressOut={() => setIsPressed("")}
+            onPress={() => {
+              router.replace("/(app)/(tabs)");
+            }}
+            hitSlop={20}
+            pressRetentionOffset={30}
+            className={`${isPressed === "home" ? "opacity-50" : "opacity-100"} z-20 h-12 w-12 items-center justify-center rounded-full bg-primary/10`}
+          >
             <Feather name="chevron-left" size={25} color="#fff" />
           </Pressable>
 
-          <Text className="text-white">Workouts</Text>
-
-          <Pressable>
-            <Feather name="more-vertical" size={20} color="#fff" />
-          </Pressable>
+          <Text
+            pointerEvents="none"
+            className="absolute left-0 right-0 text-center text-white"
+          >
+            Workouts
+          </Text>
         </View>
 
         {/* -------------------------------------------- */}
@@ -218,7 +291,14 @@ export default function Plan() {
         {nextWorkout ? (
           <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
             {/* Workout image */}
-            <Image source={push} className="h-full w-full" resizeMode="cover" />
+            <Image
+              source={resolveWorkoutImage(
+                nextWorkout.workoutCategory,
+                nextWorkout.image
+              )}
+              className="h-full w-full"
+              resizeMode="cover"
+            />
 
             {/* Dark gradient over image */}
             <LinearGradient
@@ -235,22 +315,27 @@ export default function Plan() {
               <Text className="mt-2 text-muted-2">
                 {nextWorkout.description}
               </Text>
+
+              <View className="flex-row items-center gap-2">
+                <FontAwesome5 name="fire" size={16} color="#F59E0B" />
+                <Text className="text-lg font-bold text-white">
+                  {nextWorkout?.workoutCategory} Workout
+                </Text>
+              </View>
             </View>
 
             {/* Start workout button */}
             <Pressable
               className={`absolute bottom-5 left-5 h-[50px] w-[200px] items-center justify-center rounded-full bg-primary ${
-                isPressed ? "opacity-60" : "opacity-100"
+                isPressed === "start" ? "opacity-60" : "opacity-100"
               }`}
+              onPress={() => router.push(`/workout/${nextWorkout.id}`)}
               // onPressIn={() => {
-              //   setIsPressed(true);
+              //   setIsPressed("start");
               // }}
               // onPressOut={() => {
-              //   setIsPressed(false);
+              //   setIsPressed("");
               // }}
-              onPress={() => {
-                console.log("Starting workout:", nextWorkout.id);
-              }}
             >
               <View className="flex-row items-center gap-12">
                 <Text className="font-bold">Start Workout</Text>
@@ -348,7 +433,7 @@ export default function Plan() {
               <Pressable
                 className={`${isPressed === item.id ? "opacity-60" : "opacity-100"} relative h-[160px] w-[220px] overflow-hidden rounded-3xl bg-muted-2/10`}
                 onPress={() => {
-                  console.log("WORKOUT PRESSED:", item.id);
+                  // console.log("WORKOUT PRESSED:", item.id);
 
                   router.push({
                     pathname: "/workout/[id]",
@@ -357,9 +442,15 @@ export default function Plan() {
                     },
                   });
                 }}
+                onPressIn={() => setIsPressed(item.id)}
+                onPressOut={() => setIsPressed("")}
               >
                 <Image
-                  source={{ uri: item.image }}
+                  source={
+                    item.image?.trim()
+                      ? { uri: item.image.trim() }
+                      : require("../../../assets/images/app-images/logo.png")
+                  }
                   className="h-full w-full"
                   resizeMode="cover"
                 />
@@ -408,7 +499,7 @@ export default function Plan() {
         data={filteredWorkouts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         contentContainerStyle={{
           paddingBottom: 40,
         }}
@@ -417,7 +508,7 @@ export default function Plan() {
             onPressIn={() => setWorkoutSelected(item.id)}
             onPressOut={() => setWorkoutSelected("")}
             onPress={() => {
-              console.log("Selected workout:", item.id);
+              router.push(`/workout/${item.id}/`);
             }}
             className={`mb-5 mt-5 h-[120px] w-full gap-2 overflow-hidden rounded-3xl border px-4 pt-8 ${
               workoutSelected === item.id

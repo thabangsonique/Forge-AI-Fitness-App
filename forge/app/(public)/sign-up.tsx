@@ -54,7 +54,7 @@ export default function SignUp() {
   const onSubmit = handleSubmit(async ({ email, password, fullName }) => {
     const result = getOnboardingAnswers();
 
-    console.log(result);
+    // console.log(result);
 
     if (!result.success) {
       router.replace("/welcome");

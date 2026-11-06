@@ -124,7 +124,7 @@ export default function VolumeScreen({
     };
   });
 
-  console.log("here is the weekly volume data", weeklyVolume);
+  // console.log("here is the weekly volume data", weeklyVolume);
   // max chart height
   const maxChartHeight =
     maxVolume > 0 ? Math.ceil((maxVolume * 1.2) / 1000) * 1000 : 1000;
@@ -237,7 +237,7 @@ export default function VolumeScreen({
         </View>
       }
       renderItem={({ item }) => {
-        console.log("here is the item", item);
+        // console.log("here is the item", item);
 
         const totalVolume = (item?.sets ?? []).reduce((total, set) => {
           return total + set.reps * set.weight;

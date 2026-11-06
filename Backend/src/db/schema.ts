@@ -1,6 +1,9 @@
 import {
   boolean,
+  date,
   integer,
+  json,
+  jsonb,
   pgEnum,
   pgTable,
   real,
@@ -8,6 +11,134 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "active",
+  "trialing",
+  "past_due",
+  "canceled",
+  "expired",
+]);
+
+export const aiWorkoutDraftStatusEnum = pgEnum("ai_workout_draft_status", [
+  "draft",
+  "saved",
+  "discarded",
+]);
+
+export const aiFeatureEnum = pgEnum("ai_feature", [
+  "coach_insight",
+  "workout_generation",
+]);
+
+export const aiGenerationStatusEnum = pgEnum("ai_generation_status", [
+  "pending",
+  "success",
+  "failed",
+]);
+
+export const subscriptionTierEnum = pgEnum("subscription_tier", [
+  "free",
+  "premium",
+]);
+
+//AI TABLES
+//user-subscription
+
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  status: subscriptionStatusEnum("status").notNull().default("active"),
+  tier: subscriptionTierEnum("tier").notNull().default("free"),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+//user-trial
+export const usageAiTrials = pgTable("usage_ai_trials", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  startedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  trialEnds: timestamp({ withTimezone: true }).notNull(),
+  workoutGenerationsUsed: integer("workout_generations_used")
+    .notNull()
+    .default(0),
+  insightsUsed: integer("insights_used").notNull().default(0),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+
+  updatedAt: timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+//user-insight
+export const aiInsights = pgTable("ai_insights", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  lastWorkoutSessionId: uuid("last_workout_session_id").references(
+    () => workoutSession.id
+  ),
+  fingerprint: text("fingerprint").notNull(),
+  data: json("data").notNull(),
+  generatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+//ai generated workouts - store draft workouts
+export const aiGeneratedWorkouts = pgTable("ai_generated_workouts", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  targetMuscles: jsonb("target_muscles").$type<string[]>().notNull(),
+  status: aiWorkoutDraftStatusEnum("status").notNull().default("draft"),
+  workoutData: jsonb("workout_data").notNull(),
+  savedWorkoutId: uuid("saved_workout_id").references(() => workouts.id),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+//ai-usage events
+export const aiUsageEvents = pgTable("ai_usage_events", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  feature: aiFeatureEnum("feature").notNull(),
+  model: text("model").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+  status: aiGenerationStatusEnum("status").notNull().default("pending"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+//aiGlobalUsageDaily - cap daily on bill for all users
+export const aiGlobalUsageDaily = pgTable("ai_global_usage_daily", {
+  id: uuid().notNull().defaultRandom().primaryKey(),
+  date: date("date").notNull().unique(),
+  totalRequests: integer("total_requests").notNull().default(0),
+  insightRequests: integer("insight_requests").notNull().default(0),
+  workoutRequests: integer("workout_requests").notNull().default(0),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+  updatedAt: timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -136,6 +267,10 @@ export const exercises = pgTable("exercises", {
   mechanics: text(),
   category: text().notNull(),
   image: text(),
+  instruction: jsonb().$type<string[]>().notNull().default([]),
+
+  tips: jsonb().$type<string[]>().notNull().default([]),
+  commonMistakes: jsonb().$type<string[]>().notNull().default([]),
 });
 
 //table linking workouts to exercises.-workout creation joining table.

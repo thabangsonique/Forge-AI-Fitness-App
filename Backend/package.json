@@ -17,7 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@better-auth/expo": "^1.7.3",
-    "@neondatabase/serverless": "^1.1.0",
+    "@neondatabase/serverless": "^1.1.`0",
     "better-auth": "^1.7.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

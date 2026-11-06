@@ -1,19 +1,28 @@
 import {
+  CreateWorkoutRequest,
   Exercise,
   useCreateWorkoutMutation,
+  useGetAllWorkoutsQuery,
   useGetExercisesQuery,
+  useUpdateWorkoutMutation,
 } from "@/features/api";
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { BlurView } from "expo-blur";
-import React, { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  ToastAndroid,
   View,
 } from "react-native";
 import {
@@ -39,24 +48,43 @@ type SelectedExercise = {
   restSeconds: number;
 };
 
-export interface CreateWorkoutRequest {
-  name: string;
-  description: string;
-  category: string;
-  exercises: SelectedExercise[];
-}
+const WORKOUT_TYPES = [
+  "Push",
+  "Pull",
+  "Arms",
+  "Legs",
+  "Shoulders",
+  "Quads",
+  "Push-Pull",
+  "Full Body",
+] as const;
 
 export default function Create() {
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const router = useRouter();
+  const isEditing = Boolean(editId);
+
   // STATES
-  const [activeFilter, setActiveFilter] = useState("All");
   const [form, setForm] = useState<CreateWorkoutRequest>({
     name: "",
     description: "",
     category: "",
+
     exercises: [],
   });
   const [modalOpen, setModalOpen] = useState(false);
   const [isPressed, setIsPressed] = useState("");
+  const [scheduledDate, setSheduledDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isMissing, setIsMissing] = useState(false);
+
+  //DATE REFORMAT
+  const atLocalMidnight = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    return d;
+  };
 
   //ANIAMTED GESTURE HANDLAR
   const translateY = useSharedValue(0);
@@ -99,6 +127,57 @@ export default function Create() {
     { isLoading: creatingWorkout, isError: errorCreating },
   ] = useCreateWorkoutMutation();
 
+  const [updateWorkout, { isLoading: updatingWorkout }] =
+    useUpdateWorkoutMutation();
+
+  const { data: allWorkouts } = useGetAllWorkoutsQuery();
+
+  const isSaving = creatingWorkout || updatingWorkout;
+
+  const workoutNameRef = useRef<TextInput>(null);
+
+  //PREFILL THE FORM WHEN EDITING AN EXISTING WORKOUT.
+  useEffect(() => {
+    if (!editId || !allWorkouts) return;
+
+    const workout = allWorkouts.find((w) => w.id === editId);
+
+    if (!workout) return;
+
+    setForm({
+      name: workout.name,
+      description: workout.description ?? "",
+      category: workout.workoutCategory ?? "",
+      exercises: workout.exercises.map((ex) => ({
+        exerciseId: ex.id,
+        name: ex.name,
+        muscle: ex.muscle,
+        reps: ex.reps,
+        sets: ex.sets,
+        restSeconds: ex.restSeconds,
+      })),
+    });
+
+    setSheduledDate(null);
+  }, [editId, allWorkouts]);
+
+  const resetForm = () => {
+    setForm({
+      name: "",
+      description: "",
+      category: "",
+      exercises: [],
+    });
+
+    setSheduledDate(null);
+    setShowDatePicker(false);
+  };
+
+  const cancelEditing = () => {
+    resetForm();
+    router.setParams({ editId: undefined });
+  };
+
   const DEFAULTS = { sets: 3, reps: 10, restSeconds: 60 };
 
   const PRESS_RIPPLE = { color: "rgba(0, 0, 0, 0.28)" };
@@ -108,9 +187,13 @@ export default function Create() {
 
   //function to add exercise
   const addExercise = (exercise: Exercise) => {
-    console.log("SELECTED EXERCISE", exercise);
-    console.log("SELECTED EXERCISE MUSCLE", exercise.muscle);
+    // console.log("SELECTED EXERCISE", exercise);
+    // console.log("SELECTED EXERCISE MUSCLE", exercise.muscle);
     if (form.exercises.some((ex) => ex.exerciseId === exercise.id)) {
+      ToastAndroid.show(
+        "Exercise already added to the workout.",
+        ToastAndroid.SHORT
+      );
       return;
     }
 
@@ -154,46 +237,140 @@ export default function Create() {
     }));
   };
 
+  const handleDateChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+
+    if (event.type === "set" && selected) {
+      setSheduledDate(atLocalMidnight(selected));
+    }
+  };
+
   //function to save workout -backend.
   const saveWorkout = async () => {
     try {
-      await createWorkout(form).unwrap();
+      const payload: CreateWorkoutRequest = {
+        ...form,
+        scheduledDate: scheduledDate
+          ? atLocalMidnight(scheduledDate).toISOString()
+          : undefined,
+      };
 
-      console.log("HERE IS THE WORKOUT CREATION", form);
+      if (!form.name.trim()) {
+        setIsMissing(true);
+        workoutNameRef.current?.focus();
+        return;
+      }
+
+      if (form.exercises.length === 0) {
+        Alert.alert("Missing exercises", "At least one exercise is required.");
+        return;
+      }
+
+      if (isEditing && editId) {
+        await updateWorkout({ id: editId, ...payload }).unwrap();
+
+        Alert.alert("Success", "Workout updated successfully");
+
+        resetForm();
+        setIsMissing(false);
+        router.setParams({ editId: undefined });
+        router.back();
+
+        return;
+      }
+
+      await createWorkout(payload).unwrap();
+
+      // console.log("HERE IS THE WORKOUT CREATION", form);
       Alert.alert("Success", "Workout created successfully");
+      setIsMissing(false);
+      resetForm();
     } catch (error: any) {
-      console.log("Error creating workout", error);
-      Alert.alert("Error", "Failed to create workout");
+      // console.log("Error creating workout", error);
+      Alert.alert(
+        "Error",
+        isEditing ? "Failed to update workout" : "Failed to create workout"
+      );
     }
+  };
+
+  //exercise reordering.
+  const movedExercise = (
+    exercises: SelectedExercise[],
+    fromIndex: number,
+    toIndex: number
+  ): SelectedExercise[] => {
+    if (
+      fromIndex < 0 ||
+      fromIndex >= exercises.length ||
+      toIndex < 0 ||
+      toIndex >= exercises.length ||
+      fromIndex === toIndex
+    ) {
+      return exercises;
+    }
+
+    const nextExercises = [...exercises];
+    const [movedExercise] = nextExercises.splice(fromIndex, 1);
+
+    if (!movedExercise) {
+      return exercises;
+    }
+
+    nextExercises.splice(toIndex, 0, movedExercise);
+
+    return nextExercises;
+  };
+
+  const handleMoveExercise = (fromIndex: number, toIndex: number) => {
+    setForm((prev) => ({
+      ...prev,
+      exercises: movedExercise(prev.exercises, fromIndex, toIndex),
+    }));
   };
 
   return (
     <SafeAreaView className="flex-1 bg-background  px-5 pb-20 pt-5">
       {/* header section. */}
       <View className="flex-row items-center justify-between pb-4">
-        <Text className="text-center text-lg text-white">Create Workout</Text>
+        <Text className="text-center text-lg text-white">
+          {isEditing ? "Edit Workout" : "Create Workout"}
+        </Text>
         <Pressable
-          disabled={creatingWorkout}
+          disabled={isSaving}
           onPress={() => saveWorkout()}
           className="rounded-3xl bg-primary px-4 py-2"
         >
-          {creatingWorkout ? (
+          {isSaving ? (
             <>
               <ActivityIndicator />
             </>
           ) : (
-            <Text>Save Workout</Text>
+            <Text>{isEditing ? "Update Workout" : "Save Workout"}</Text>
           )}
         </Pressable>
       </View>
+
+      {isEditing && (
+        <Pressable
+          onPress={cancelEditing}
+          className="mb-2 self-start rounded-full bg-muted-2/10 px-4 py-2"
+        >
+          <Text className="text-muted-2">Cancel editing</Text>
+        </Pressable>
+      )}
 
       {/* create workout contents  section*/}
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="mt-[50px]">
           <Text className="text-white">Workout Name</Text>
           <TextInput
+            ref={workoutNameRef}
             placeholder="e.g Push Day"
-            className="mt-3 rounded-3xl bg-muted-2/10 px-4 text-muted-2 text-white placeholder:text-muted-2/50 "
+            className={`${isMissing ? "border-red-500" : "border-transparent"} mt-3 rounded-3xl border bg-muted-2/10 px-4 text-muted-2 text-white placeholder:text-muted-2/50 `}
+            selectionColor="#dae86aff"
             onChangeText={(text) =>
               setForm((prev) => ({
                 ...prev,
@@ -202,6 +379,9 @@ export default function Create() {
             }
             value={form.name}
           />
+          {isMissing && (
+            <Text className="mt-2 text-red-500">Workout name is required.</Text>
+          )}
 
           {/* description */}
           <Text className="mt-8 text-white ">Description</Text>
@@ -217,29 +397,110 @@ export default function Create() {
             className="mt-3 rounded-3xl bg-muted-2/10 px-4 text-muted-2 text-white placeholder:text-muted-2/50 "
           />
         </View>
-        {/* WORKOUT CATEGORY */}
+        {/* WORKOUT TYPE / CATEGORY */}
+        <Text className="mt-8 text-white">Workout Type</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 12 }}
-          className="mt-8 flex-grow-0"
+          contentContainerStyle={{ gap: 12, paddingRight: 16 }}
+          className="mt-3 flex-grow-0"
         >
-          {(["strength Gain", "Muscle Gain"] as const).map(
-            (workoutType, idx) => (
+          {WORKOUT_TYPES.map((workoutType) => {
+            const isSelected = form.category === workoutType;
+
+            return (
               <Pressable
-                key={idx}
-                onPress={() => setActiveFilter(workoutType)}
-                className={`h-10 w-[100px] items-center justify-center rounded-3xl  ${activeFilter === workoutType ? " bg-primary" : "bg-muted-2/10"}`}
+                key={workoutType}
+                onPress={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    category: prev.category === workoutType ? "" : workoutType,
+                  }))
+                }
+                className={`h-10 items-center justify-center rounded-3xl px-5 ${
+                  isSelected ? "bg-primary" : "bg-muted-2/10"
+                }`}
               >
                 <Text
-                  className={`text-sm  ${activeFilter === workoutType ? "text-black" : "text-muted-2/50"}`}
+                  className={`text-sm ${
+                    isSelected ? "text-black" : "text-muted-2/50"
+                  }`}
                 >
                   {workoutType}
                 </Text>
               </Pressable>
-            )
-          )}
+            );
+          })}
         </ScrollView>
+
+        {/* schedule for */}
+        {/* SCHEDULE DATE (OPTIONAL) */}
+
+        {!isEditing && (
+          <>
+            <Text className="mt-8 text-white">Schedule date (optional)</Text>
+
+            <View className="mt-3 flex-row items-center justify-between rounded-3xl bg-muted-2/10 px-4 py-3">
+              {/* DATE SELECTION BUTTON */}
+
+              <Pressable
+                onPress={() => setShowDatePicker(true)}
+                className="flex-1 flex-row items-center gap-3"
+              >
+                <Feather name="calendar" size={18} color="#D8FF00" />
+
+                <Text className="text-white">
+                  {scheduledDate
+                    ? scheduledDate.toLocaleDateString(undefined, {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "No date selected"}
+                </Text>
+              </Pressable>
+
+              {/* CLEAR SELECTED DATE */}
+
+              {scheduledDate && (
+                <Pressable
+                  onPress={() => setSheduledDate(null)}
+                  hitSlop={10}
+                  className="rounded-full bg-muted-2/20 p-1"
+                >
+                  <Feather name="x" size={16} color="#a0a0a0" />
+                </Pressable>
+              )}
+            </View>
+
+            {/* DATE PICKER */}
+
+            {showDatePicker && (
+              <View className="mt-3 rounded-3xl bg-muted-2/10 py-2">
+                <DateTimePicker
+                  value={scheduledDate ?? new Date()}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  minimumDate={atLocalMidnight(new Date())}
+                  onChange={handleDateChange}
+                  themeVariant="dark"
+                />
+
+                {/* IOS DONE BUTTON */}
+
+                {Platform.OS === "ios" && (
+                  <Pressable
+                    onPress={() => setShowDatePicker(false)}
+                    className="items-center self-end rounded-full bg-primary px-4 py-1"
+                  >
+                    <Text className="text-black">Done</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+          </>
+        )}
 
         <Pressable
           onPress={() => setModalOpen(true)}
@@ -259,8 +520,8 @@ export default function Create() {
         <View className="gap-5 rounded-3xl py-4">
           {/* each exercise--HARDCODED */}
 
-          {form.exercises.map((ex) => {
-            console.log("added exercise muscle", ex.muscle);
+          {form.exercises.map((ex, index) => {
+            // console.log("added exercise muscle", ex.muscle);
             return (
               <View
                 key={ex.exerciseId}
@@ -268,6 +529,29 @@ export default function Create() {
               >
                 {/* exercise header section */}
                 <View className="flex-row items-center justify-between">
+                  {/* Reordering buttons */}
+                  <View className="mr-4 items-center gap-1 ">
+                    {/* Move exercise up */}
+                    <Pressable
+                      disabled={index === 0}
+                      onPress={() => handleMoveExercise(index, index - 1)}
+
+                      className="mb-3 h-8 w-8 items-center justify-center rounded-full bg-background"
+                    >
+                      <Feather name="arrow-up" size={25} color="#D8FF00" />
+                    </Pressable>
+
+                    {/* Move exercise down */}
+                    <Pressable
+                      disabled={index === form.exercises.length - 1}
+                      onPress={() => handleMoveExercise(index, index + 1)}
+
+                      className="h-8 w-8 items-center justify-center rounded-full bg-background"
+                    >
+                      <Feather name="arrow-down" size={25} color="#D8FF00" />
+                    </Pressable>
+                  </View>
+
                   {/* image here */}
                   <View className="h-[60px] w-[60px]  items-center justify-center rounded-3xl bg-background">
                     <Text className="text-center text-white">Image here</Text>
@@ -278,16 +562,22 @@ export default function Create() {
                     <Text className="text-muted-2/50">{ex.muscle}</Text>
                   </View>
 
+                  {/* arrow positions */}
+                  {/* arrow buttons + remove button */}
+                  <View className="flex-row items-center gap-2">
+                    {/* Remove exercise */}
+                    <Pressable
+                      onPress={() => removeExercise(ex.exerciseId)}
+                      onPressIn={() => setIsPressed("remove")}
+                      onPressOut={() => setIsPressed("")}
+                      className={`${
+                        isPressed === "remove" ? "opacity-0.5" : "opacity-1"
+                      } h-10 w-[80px] items-center justify-center rounded-full bg-primary`}
+                    >
+                      <Text>Remove</Text>
+                    </Pressable>
+                  </View>
                   {/* remove exercise */}
-                  <Pressable
-                    onPress={() => removeExercise(ex.exerciseId)}
-                    onPressIn={() => setIsPressed("remove")}
-                    onPressOut={() => setIsPressed("")}
-
-                    className={`${isPressed === "remove" ? "opacity-0.5" : "opacity-1"} h-10 w-[80px] items-center justify-center rounded-full bg-primary`}
-                  >
-                    <Text>Remove</Text>
-                  </Pressable>
                 </View>
 
                 {/* set selector section */}

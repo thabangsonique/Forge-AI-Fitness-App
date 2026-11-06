@@ -26,7 +26,7 @@ export default function statistics() {
     status,
   } = useGetUserStatsQuery();
 
-  console.log("user stats:", UserStats?.exerciseBreakedown);
+  // console.log("user stats:", UserStats?.exerciseBreakedown);
   return (
     <SafeAreaView className="flex-1 bg-background px-5 pb-[50px] pt-5">
       {/* header */}

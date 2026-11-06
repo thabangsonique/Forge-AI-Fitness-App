@@ -25,8 +25,8 @@ export default function MusclePieChart({ muscleDistribution }: MusclePie) {
               : "#DAE86A1A",
     }));
 
-  console.log("Muscle distribution:", muscleDistribution);
-  console.log("Pie data:", pieData);
+  // console.log("Muscle distribution:", muscleDistribution);
+  // console.log("Pie data:", pieData);
   return (
     <View className="items-center justify-center">
       <PieChart

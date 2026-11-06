@@ -66,7 +66,7 @@ export default function welcome() {
           > */}
           <Pressable
             onPress={() => {
-              console.log("BUTTON PRESSED");
+              // console.log("BUTTON PRESSED");
 
               router.push({
                 pathname: "/onboarding/[step]",

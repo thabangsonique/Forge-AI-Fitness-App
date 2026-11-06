@@ -21,7 +21,7 @@ export default function MuscleHypertrophy({
     userStats?.weeklyMuscleSets.filter((item) => item.muscle === isActive) ??
     [];
   // console.log("muscleHyper screen:", userStats?.weeklyMuscleSets);
-  console.log("selected muscle:", selectedMuscle);
+  // console.log("selected muscle:", selectedMuscle);
 
   //get the start of the current week.(monday of current week)
   const getStartWeek = (date: Date) => {

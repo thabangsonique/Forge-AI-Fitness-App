@@ -59,7 +59,7 @@ export default function SignIn() {
       //redirect user to the homepage.
       router.replace("/(app)/(tabs)");
     } catch (error: any) {
-      console.error("Failed to sign in. server error", error);
+      // console.error("Failed to sign in. server error", error);
       Alert.alert("Server error signing in", error.message);
     } finally {
       setIsLoading(false);

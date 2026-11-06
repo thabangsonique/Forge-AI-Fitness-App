@@ -61,6 +61,9 @@ export interface Exercise {
   category: string | null;
   exerciseCategory?: string | null;
   image: string | null;
+  instruction: string[];
+  tips: string[];
+  commonMistakes: string[];
   position: number;
   sets: number;
   reps: number;
@@ -80,6 +83,7 @@ export interface CreateWorkoutRequest {
   name: string;
   description: string;
   category: string;
+  scheduledDate?: String;
   exercises: SelectedExercise[];
 }
 
@@ -239,7 +243,27 @@ export const api = createApi({
         method: "POST",
         body: form,
       }),
-      invalidatesTags: ["Workouts"],
+      invalidatesTags: ["Workouts", "ScheduledWorkouts"],
+    }),
+
+    updateWorkout: build.mutation<
+      { success: boolean; workout: Workout },
+      { id: string } & CreateWorkoutRequest
+    >({
+      query: ({ id, ...form }) => ({
+        url: `/api/workouts/${id}`,
+        method: "PUT",
+        body: form,
+      }),
+      invalidatesTags: ["Workouts", "ScheduledWorkouts"],
+    }),
+
+    deleteWorkout: build.mutation<{ success: boolean }, string>({
+      query: (id) => ({
+        url: `/api/workouts/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Workouts", "ScheduledWorkouts"],
     }),
 
     getScheduledWorkouts: build.query<ScheduledWorkouts[], void>({
@@ -367,9 +391,9 @@ export const api = createApi({
 
       transformResponse: (response: {
         success: true;
-        searchTerm: Workout[];
+        searchResults: Workout[];
       }) => {
-        return response.searchTerm;
+        return response.searchResults;
       },
 
       providesTags: (result) =>
@@ -443,6 +467,8 @@ export const {
   useGetWorkoutsBySearchQuery,
   useGetExercisesQuery,
   useCreateWorkoutMutation,
+  useUpdateWorkoutMutation,
+  useDeleteWorkoutMutation,
   useCreateWorkoutSessionMutation,
   useGetUserStatsQuery,
   useGetPersonalRecordsQuery,

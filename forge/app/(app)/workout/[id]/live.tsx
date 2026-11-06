@@ -21,6 +21,8 @@ import { ScrollView } from "react-native-gesture-handler";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+type ModalAction = "leave" | "finish" | null;
+
 type WorkoutSet = {
   exerciseId: string;
   setNumber: number;
@@ -57,7 +59,7 @@ export default function live() {
 
   const workout = allWorkouts?.find((w) => w.id === id);
 
-  console.log("exercise images", workout?.exercises);
+  // console.log("exercise images", workout?.exercises);
 
   //STATES
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -76,6 +78,7 @@ export default function live() {
   const [startedAt] = useState(new Date().toISOString());
   const [completedAt] = useState(new Date().toISOString());
   const [incompleteAlert, setIncompleteAlert] = useState(false);
+  const [modalAction, setModalAction] = useState<ModalAction>(null);
 
   //TIMER SCROLLVIEW
   const scrollViewRef = useRef<KeyboardAwareScrollView>(null);
@@ -261,9 +264,15 @@ export default function live() {
     },
     0
   );
-  const handleFinishWorkout = async () => {
-    //alert for incompleted sets
-    if (totalSetsRequired !== completedSetsCount) {
+  const handleFinishWorkout = async (confirmed = false) => {
+    // Don't continue if workout data hasn't loaded.
+    if (totalSetsRequired === undefined) {
+      return;
+    }
+
+    // Check whether the user has incomplete sets.
+    if (!confirmed && completedSetsCount < totalSetsRequired) {
+      setModalAction("finish");
       setIncompleteAlert(true);
       return;
     }
@@ -302,22 +311,27 @@ export default function live() {
         "Workout completed successfully!",
         ToastAndroid.SHORT //how long the toast stays on the screen.
       );
+
+      setIncompleteAlert(false);
+      setModalAction(null);
+
+      router.replace({
+        pathname: "/(app)/workout/[id]/completeSession",
+        params: { id },
+      });
     } catch (error) {
-      console.log("Failed to create workout session", error);
+      // console.log("Failed to create workout session", error);
 
       ToastAndroid.show(
         "Failed to create workout session.Please try again.",
         ToastAndroid.SHORT
       );
     }
-
-    //redirect to workout session created page.
-    router.replace(`/(app)/workout/${id}/completeSession`);
   };
 
-  console.log("ALL SETS", workout?.exercises);
-  ape: console.log(JSON.stringify(workout?.exercises?.[0], null, 2));
-  console.log("exersice image,:", currentExercise?.image);
+  // console.log("ALL SETS", workout?.exercises);
+  // ape: console.log(JSON.stringify(workout?.exercises?.[0], null, 2));
+  // console.log("exersice image,:", currentExercise?.image);
   return (
     <SafeAreaView className="flex-1 bg-background pb-5 pt-5">
       <KeyboardAwareScrollView
@@ -333,8 +347,8 @@ export default function live() {
 
           <Pressable
             onPress={() => {
-              setSelected("leave");
-              handleFinishWorkout();
+              setModalAction("leave");
+              setIncompleteAlert(true);
             }}
             className="rounded-3xl bg-primary/10 px-5 py-3"
           >
@@ -350,13 +364,13 @@ export default function live() {
         </View>
 
         {/* image of the exercise */}
-        <View className="mt-2 overflow-hidden rounded-3xl">
+        <View className="mt-2 items-center justify-center overflow-hidden rounded-3xl bg-muted-2/10">
           <Image
             source={{
               uri: currentExercise?.image ?? workout?.image ?? undefined,
             }}
-            className=" h-[150px]"
-            resizeMode="cover"
+            className="h-[200px] w-full"
+            resizeMode="contain"
           />
           <LinearGradient
             colors={["transparent", "rgba(11,12,10,0.9)"]}
@@ -401,12 +415,12 @@ export default function live() {
                   className="h-full w-full"
                   resizeMode="cover"
                   onLoad={() => {
-                    console.log("IMAGE LOADED:", exercise.name);
+                    // console.log("IMAGE LOADED:", exercise.name);
                   }}
                   onError={(event) => {
-                    console.log("IMAGE FAILED:", exercise.name);
-                    console.log("IMAGE URL:", JSON.stringify(imageUri));
-                    console.log("IMAGE ERROR:", event.nativeEvent.error);
+                    // console.log("IMAGE FAILED:", exercise.name);
+                    // console.log("IMAGE URL:", JSON.stringify(imageUri));
+                    // console.log("IMAGE ERROR:", event.nativeEvent.error);
                   }}
                 />
               </View>
@@ -638,7 +652,9 @@ export default function live() {
         {/* button */}
         <View className="w-full px-5">
           <Pressable
-            onPress={handleFinishWorkout}
+            onPress={() => {
+              handleFinishWorkout();
+            }}
             disabled={creatingSession}
 
             className="mt-4 h-[40px] w-full items-center justify-center rounded-full bg-primary"
@@ -660,8 +676,9 @@ export default function live() {
           totalSetsRequired={totalSetsRequired}
           completedSetsCount={completedSetsCount}
           handleFinishWorkout={handleFinishWorkout}
-          selected={selected}
-          setSelected={setSelected}
+          creatingSession={creatingSession}
+          modalAction={modalAction}
+          setModalAction={setModalAction}
         />
       )}
     </SafeAreaView>

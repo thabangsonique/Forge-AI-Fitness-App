@@ -9,6 +9,7 @@ import {
   exercises,
   scheduledWorkouts,
   workoutExercises,
+  workoutSession,
   workouts,
 } from "../db/schema";
 import { auth } from "../lib/auth";
@@ -174,7 +175,8 @@ export const getAllWorkouts = async (req: Request, res: Response) => {
           eq(workouts.userId, session.user.id),
           eq(workouts.workoutType, "system")
         )
-      );
+      )
+      .orderBy(asc(workouts.id), asc(workoutExercises.position));
 
     const groupedWorkouts = allWorkouts.reduce(
       (acc, row) => {
@@ -281,6 +283,7 @@ export const getScheduledWorkouts = async (req: Request, res: Response) => {
     //identify saturday of the week.
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(endOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
 
     const scheduled = await db.query.scheduledWorkouts.findMany({
       where: and(
@@ -307,7 +310,9 @@ export const getScheduledWorkouts = async (req: Request, res: Response) => {
 
 export const getWorkoutsBySearch = async (req: Request, res: Response) => {
   try {
-    const session = await auth.api.getSession();
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
 
     if (!session || !session.user) {
       return res.status(401).json({ error: "Unauthorized-no token found" });
@@ -349,7 +354,11 @@ export const getWorkoutsBySearch = async (req: Request, res: Response) => {
       .innerJoin(exercises, eq(workoutExercises.exerciseId, exercises.id))
       .where(
         and(
-          eq(workouts.userId, session.user.id),
+          or(
+            eq(workouts.userId, session.user.id),
+            eq(workouts.workoutType, "system")
+          ),
+
           sql`${workouts.name} ILIKE ${`%${searchTerm}%`}`
         )
       )
@@ -398,6 +407,141 @@ export const getWorkoutsBySearch = async (req: Request, res: Response) => {
       .json({ success: true, searchResults: formattedWorkouts });
   } catch (error: any) {
     console.error("Error searching workouts:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+//UPDATE A USER'S WORKOUT.
+export const updateWorkout = async (req: Request, res: Response) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    if (!session || !session.user) {
+      return res.status(401).json({ error: "Unauthorized-no token found" });
+    }
+
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      category,
+      exercises: workoutExerciseList,
+    } = req.body;
+
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    const existingWorkout = await db.query.workouts.findFirst({
+      where: eq(workouts.id, id as string),
+    });
+
+    if (!existingWorkout) {
+      return res.status(404).json({ error: "Workout not found." });
+    }
+
+    if (
+      existingWorkout.workoutType === "system" ||
+      existingWorkout.userId !== session.user.id
+    ) {
+      return res.status(403).json({ error: "You cannot edit this workout." });
+    }
+
+    const updatedWorkout = await (async () => {
+      const rows =
+        Array.isArray(workoutExerciseList) && workoutExerciseList.length > 0
+          ? workoutExerciseList.map((ex: any, index: number) => ({
+              userId: session.user.id,
+              workoutId: id as string,
+              exerciseId: ex.exerciseId,
+              restSeconds: Number(ex.restSeconds) || 60,
+              sets: Number(ex.sets) || 3,
+              reps: Number(ex.reps) || 10,
+              position: index,
+            }))
+          : [];
+
+      const [updatedRows] = await db.batch([
+        db
+          .update(workouts)
+          .set({
+            name,
+            description: description || null,
+            category: category || null,
+          })
+          .where(eq(workouts.id, id as string))
+          .returning(),
+        db
+          .delete(workoutExercises)
+          .where(eq(workoutExercises.workoutId, id as string)),
+        ...(rows.length > 0 ? [db.insert(workoutExercises).values(rows)] : []),
+      ]);
+
+      return updatedRows[0];
+    })();
+
+    return res.status(200).json({ success: true, workout: updatedWorkout });
+  } catch (error: any) {
+    console.error("Server failed to update workout", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+//DELETE A USER'S WORKOUT.
+export const deleteWorkout = async (req: Request, res: Response) => {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    if (!session || !session.user) {
+      return res.status(401).json({ error: "Unauthorized-no token found" });
+    }
+
+    const { id } = req.params;
+
+    const existingWorkout = await db.query.workouts.findFirst({
+      where: eq(workouts.id, id as string),
+    });
+
+    if (!existingWorkout) {
+      return res.status(404).json({ error: "Workout not found." });
+    }
+
+    if (
+      existingWorkout.workoutType === "system" ||
+      existingWorkout.userId !== session.user.id
+    ) {
+      return res.status(403).json({ error: "You cannot delete this workout." });
+    }
+
+    //preserve completed session history.
+    const completedSession = await db.query.workoutSession.findFirst({
+      where: eq(workoutSession.workoutId, id as string),
+    });
+
+    if (completedSession) {
+      return res.status(409).json({
+        error:
+          "This workout has completed sessions and cannot be deleted. Your history would be lost.",
+      });
+    }
+
+    await db.batch([
+      db
+        .delete(scheduledWorkouts)
+        .where(eq(scheduledWorkouts.workoutId, id as string)),
+      db
+        .delete(workoutExercises)
+        .where(eq(workoutExercises.workoutId, id as string)),
+      db.delete(workouts).where(eq(workouts.id, id as string)),
+    ]);
+
+    return res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error("Server failed to delete workout", error);
     return res.status(500).json({ error: error.message });
   }
 };

@@ -45,3 +45,15 @@ export const formatElapsedTime = (totalSeconds: number): string => {
 
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 };
+
+export const formatTrainedTime = (totalSeconds: number): string => {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes} min`;
+  }
+
+  return `${minutes} min`;
+};

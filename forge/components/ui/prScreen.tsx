@@ -22,10 +22,10 @@ export default function PrScreen() {
     error,
   } = useGetPersonalRecordsQuery();
 
-  console.log("PR data:", recordsData);
-  console.log("Loading:", isLoading);
-  console.log("Fetching:", isFetching);
-  console.log("Error:", error);
+  // console.log("PR data:", recordsData);
+  // console.log("Loading:", isLoading);
+  // console.log("Fetching:", isFetching);
+  // console.log("Error:", error);
 
   const heroStats = recordsData?.hero;
   const records = recordsData?.records;

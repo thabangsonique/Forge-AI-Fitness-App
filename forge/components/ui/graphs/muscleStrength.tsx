@@ -27,7 +27,7 @@ export default function MuscleStrength({ isActive }: MuscleStrengthProps) {
     muscle1RMS && muscle1RMS.length > 0 ? Math.max(...muscle1RMS) : 0
   );
 
-  console.log("1 rep max's", muscle1RMS);
+  // console.log("1 rep max's", muscle1RMS);
 
   return (
     <View className="overflow-hidden rounded-3xl border border-muted/20 bg-black  px-4 py-4">

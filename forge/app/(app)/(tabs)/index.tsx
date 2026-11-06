@@ -9,19 +9,42 @@ import {
   useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
 import { authClient } from "@/lib/auth-client";
+import { formatTrainedTime } from "@/utils/formatDuration";
 import { Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { Href, useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type ImageSourcePropType,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const userImage = require("../../../assets/images/app-images/user-profile.png");
 const push = require("../../../assets/images/app-images/push.jpeg");
 const pull = require("../../../assets/images/app-images/pull.png");
 const legs = require("../../../assets/images/app-images/Legs.png");
+const arm = require("../../../assets/images/app-images/arm.png");
+const shoulder = require("../../../assets/images/app-images/shoulder.png");
+const anatomy = require("../../../assets/images/app-images/anatomy.png");
+const logo = require("../../../assets/images/app-images/logo.png");
 const gBackground = require("../../../assets/images/app-images/gradient.png");
+
+const CATEGORY_IMAGES: Record<string, ImageSourcePropType> = {
+  push: push,
+  pull: pull,
+  arms: arm,
+  legs: legs,
+  shoulders: shoulder,
+  quads: legs,
+  "push-pull": push,
+  "full body": anatomy,
+};
 
 //QUICK ACTIONS.
 type QuickAction = {
@@ -50,7 +73,7 @@ const quickActions: QuickAction[] = [
   {
     icon: "brain",
     title: "AI Coach",
-    href: "/(app)/(tabs)/workouts",
+    href: "/(app)/ai-coach/AI-insight",
   },
 ];
 
@@ -72,6 +95,22 @@ type DayData = {
   isFuture: boolean;
   isToday: boolean;
   wasCompleted: boolean;
+};
+
+//NEXT WORKOUT IMAGE.
+const resolveWorkoutImage = (
+  category?: string | null,
+  image?: string | null
+): ImageSourcePropType => {
+  const categoryImage = CATEGORY_IMAGES[category?.trim().toLowerCase() ?? ""];
+
+  if (categoryImage) {
+    return categoryImage;
+  }
+
+  //for system workouts
+  const systemWorkout = image?.trim();
+  return systemWorkout ? { uri: systemWorkout } : logo;
 };
 
 //check for existing workout session's data within current weekdays.
@@ -307,6 +346,45 @@ export default function index() {
     workoutHistory?.map((session) => session.workoutId) ?? []
   ).size;
 
+  //find weekly duration:
+  // 1. Get all workouts completed during the current week
+  const weeklyWorkouts = useMemo(() => {
+    if (!workoutHistory || workoutHistory.length === 0) {
+      return [];
+    }
+
+    // Get Sunday 00:00:00 (start of the week)
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // Get Saturday 23:59:59 (end of the week)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return workoutHistory.filter((session) => {
+      const completedAt = new Date(session.completedAt);
+      return completedAt >= startOfWeek && completedAt <= endOfWeek;
+    });
+  }, [workoutHistory]);
+
+  // 2. Calculate the total duration from those weekly workouts
+  const weeklyTrainedDuration = useMemo(() => {
+    const totalSeconds = weeklyWorkouts.reduce(
+      (sum, session) => sum + (session.durationSeconds || 0),
+      0
+    );
+
+    return formatTrainedTime(totalSeconds);
+  }, [weeklyWorkouts]);
+
+  console.log(
+    "NEXT WORKOUT CATEGORY:",
+    JSON.stringify(nextScheduledWorkout?.workoutCategory)
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-background px-5 pt-5">
       {/* SECTION- user profile*/}
@@ -337,7 +415,15 @@ export default function index() {
         </View>
 
         {/* notification icon */}
-        <Feather name="bell" size={23} color="white" />
+        <Pressable
+          hitSlop={10}
+          onPress={() => router.push("/(app)/(tabs)/profile")}
+          onPressIn={() => setIsSelected("settings")}
+          onPressOut={() => setIsSelected("")}
+          className={`${isSelected === "settings" ? "opacity-50" : "opacity-100"}`}
+        >
+          <Feather name="settings" size={23} color="white" />
+        </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -346,46 +432,72 @@ export default function index() {
         {/* workout card */}
 
         {nextScheduledWorkout ? (
-          <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl bg-primary">
-            <Image source={push} className="h-full w-full" resizeMode="cover" />
+          <View className="relative mt-2 h-[200px] w-full overflow-hidden rounded-3xl ">
+            <Image
+              source={resolveWorkoutImage(
+                nextScheduledWorkout.workoutCategory,
+                nextScheduledWorkout.image
+              )}
+              className="h-full w-full"
+              resizeMode="cover"
+            />
             <LinearGradient
               colors={["transparent", "rgba(0,0,0,0.9)"]}
               className="absolute inset-0"
             />
 
-            <View className="absolute bottom-5 left-5 right-5 w-[300px] flex-row items-center">
-              <View>
-                <Text className="text-lg font-semibold text-white">
-                  Push Day
+            <View className="absolute bottom-5 left-5 right-5 flex-row items-center">
+              <View className="flex-1 pr-4">
+                <Text
+                  numberOfLines={1}
+                  className="text-lg font-semibold text-white"
+                >
+                  {nextScheduledWorkout.name}
                 </Text>
-                <Text className="text-muted-2">
-                  Chest - Shoulders - Triceps
+                <Text numberOfLines={1} className="text-muted-2">
+                  {nextScheduledWorkout.description?.trim() || "Workout"}
                 </Text>
+                <View className="flex-row items-center gap-2">
+                  <FontAwesome5 name="fire" size={16} color="#F59E0B" />
+                  <Text className="text-lg font-bold text-white">
+                    {nextScheduledWorkout?.workoutCategory} Workout
+                  </Text>
+                </View>
 
                 <View className="mt-2 flex-row items-center">
-                  <Feather name="clock" color="#C7C8BF" size={15} />
-                  <Text className="ml-2 text-muted-2"> 45 min</Text>
-                  <FontAwesome5
-                    name="dumbbell"
+                  <FontAwesome5 name="dumbbell" color="#C7C8BF" size={15} />
+                  <Text className="ml-2 text-muted-2">
+                    {nextScheduledWorkout.exerciseCount}{" "}
+                    {nextScheduledWorkout.exerciseCount === 1
+                      ? "exercise"
+                      : "exercises"}
+                  </Text>
+                  <Feather
+                    name="layers"
                     color="#C7C8BF"
                     size={15}
                     className="ml-4"
                   />
-                  <Text className="ml-2 text-muted-2"> 320 kcal</Text>
+                  <Text className="ml-2 text-muted-2">
+                    {nextScheduledWorkout.totalSets}{" "}
+                    {nextScheduledWorkout.totalSets === 1 ? "set" : "sets"}
+                  </Text>
                 </View>
               </View>
             </View>
 
             {/* start workout button */}
             <Pressable
-              // onPress={()=> router.push(`/(app)/workouts/${ScheduledWorkouts}`)}
+              onPress={() =>
+                router.push({
+                  pathname: "/workout/[id]",
+                  params: { id: nextScheduledWorkout.id },
+                })
+              }
               className={`absolute bottom-5 right-[30px] h-[50px] w-[50px] items-center justify-center rounded-full bg-primary ${
                 isPressed ? "opacity-60" : "opacity-100"
               }`}
-              onPressIn={() => {
-                setIsPressed(true);
-                console.log("BUTTON IS PRESSING");
-              }}
+              onPressIn={() => setIsPressed(true)}
               onPressOut={() => setIsPressed(false)}
             >
               <Feather name="chevron-right" color="black" size={23} />
@@ -444,6 +556,10 @@ export default function index() {
           Your training summary
         </Text>
         <View className="mt-4 h-[130px] w-full overflow-hidden rounded-3xl bg-muted/10 px-7 py-4">
+          <LinearGradient
+            colors={["transparent", "rgba(218, 232, 106, 0.05)"]}
+            className="absolute inset-0"
+          />
           <Text className=" text-white">Scheduled Workouts</Text>
 
           {/* weekdays */}
@@ -474,7 +590,7 @@ export default function index() {
               <Ionicons name="barbell-outline" size={20} color="#D8FF00" />
             </View>
 
-            <Text className="text-white">{uniqueWorkoutsCount}</Text>
+            <Text className="text-white">{weeklyWorkouts.length}</Text>
             <Text className="text-muted-2/50">Workouts</Text>
           </View>
           <View className="flex-1 items-center justify-center gap-3">
@@ -483,20 +599,24 @@ export default function index() {
             </View>
 
             <Text className="text-white">3,240</Text>
-            <Text className="text-muted-2/50">calories</Text>
+            <Text className="text-muted-2/50">calories burned</Text>
           </View>
           <View className="flex-1 items-center justify-center gap-3">
             <View className="rounded-full bg-primary/10 p-2">
               <Ionicons name="watch-outline" size={20} color="#D8FF00" />
             </View>
 
-            <Text className="text-white">5h 30 min</Text>
+            <Text className="text-white">{weeklyTrainedDuration}</Text>
             <Text className="text-muted-2/50">Trained</Text>
           </View>
         </View>
 
+        <Text className="mt-2 text-sm text-muted-2/50">
+          Calorie estimates are based on your recorded workout history and
+          session performance. Actual calories burned may vary.
+        </Text>
         {/* SECTION-quick actions */}
-        <Text className="text-md mb-3 mt-5 text-muted-2">Quick Actions</Text>
+        <Text className="text-md mb-3 mt-6 text-muted-2">Quick Actions</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -506,9 +626,10 @@ export default function index() {
           {quickActions.map((action, index) => (
             <Pressable
               key={index}
-
+              onPressIn={() => setIsSelected(action.title)}
+              onPressOut={() => setIsSelected("")}
               onPress={() => {
-                (setIsSelected(action.title), router.push(action.href));
+                router.push(action.href);
               }}
               className={`h-[90px] w-[80px] items-center justify-between rounded-3xl px-2 py-5 ${isSelected === action.title ? "bg-primary/20" : "bg-muted/10 "}`}
             >

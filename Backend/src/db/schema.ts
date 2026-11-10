@@ -214,6 +214,7 @@ export const profiles = pgTable("profiles", {
   gender: genderEnum().notNull(),
   goal: goalEnum().notNull(),
   experience: experienceEnum().notNull(),
+  workoutsPerWeek: integer("workouts_per_week").notNull().default(4),
   weightUnit: weightUnitEnum().notNull().default("kg"),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true })

@@ -18,4 +18,3 @@ export async function getUserFitnessProfile(
     weightUnit: profile?.weightUnit ?? "kg",
   };
 }
-

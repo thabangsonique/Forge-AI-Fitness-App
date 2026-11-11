@@ -63,7 +63,7 @@ export const resolveTargetMuscles = async (
 
 export const fetchExercisesCandidates = async (
   targetMuscle: string[],
-  preferredEquipment: string[]
+  preferredEquipment?: string[]
 ): Promise<ExerciseCandidates[]> => {
   if (targetMuscle.length === 0) {
     return [];

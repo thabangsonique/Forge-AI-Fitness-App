@@ -66,7 +66,7 @@ export const getUserTrialSummary = async (
   const isExpired = now > trial.trialEnds;
 
   //find days remaining.
-  const miliSecRemaining = now.getTime() - trial.trialEnds.getTime();
+  const miliSecRemaining = trial.trialEnds.getTime() - now.getTime();
 
   const daysRemaining = Math.ceil(miliSecRemaining / (24 * 60 * 60 * 1000));
 
@@ -110,7 +110,7 @@ export const checkUserEntitlement = async (
 
   //if the user is not on premium.
   const trialSummary = await getUserTrialSummary(userId);
-  if (trialSummary.isEligible) {
+  if (trialSummary.isExpired) {
     return {
       allowed: false,
       reason: `Your ${config.trialDays}-day free trial has expired. Upgrade to Forge Pro to continue using AI coaching.`,

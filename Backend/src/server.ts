@@ -7,6 +7,7 @@ import { db } from "./db";
 import { profiles } from "./db/schema";
 import { auth } from "./lib/auth";
 import aiCoachRoutes from "./routes/aiCoachRoutes";
+import aiWorkoutRoutes from "./routes/aiWorkoutRoutes";
 import exercisesRoutes from "./routes/exercisesRoutes";
 import personalRecordsRoutes from "./routes/personalRecordsRoutes";
 import scheduledWorkoutsRoutes from "./routes/scheduledWorkoutsRoutes";
@@ -58,6 +59,7 @@ app.use("/api", exercisesRoutes);
 app.use("/api", scheduledWorkoutsRoutes);
 app.use("/api", personalRecordsRoutes);
 app.use("/api/ai", aiCoachRoutes);
+app.use("/api/ai", aiWorkoutRoutes);
 
 //STAND ALONE.
 //profile routes.

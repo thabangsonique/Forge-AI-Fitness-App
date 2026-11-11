@@ -148,7 +148,7 @@ INSTRUCTIONS:
 `;
 };
 
-export const validateGenratedWorkout = (
+export const validateGeneratedWorkout = (
   workout: GeneratedWorkoutPlan,
   candidates: ExerciseCandidates[]
 ): GeneratedWorkoutPlan => {

@@ -36,10 +36,11 @@ export async function getFitnessContext(
 
   return {
     profile,
-    volumeTrend: volumeAnalytics.volumeTrend,
+    volume: volumeAnalytics.volumeTrend,
     muscleDistribution: muscleAnalytics.distribution,
     topStrengthTrends: strengthProgressions.slice(0, 5),
     recentMilestones,
     trainingGaps: muscleAnalytics.gaps,
+    personalRecords: personalRecords,
   };
 }

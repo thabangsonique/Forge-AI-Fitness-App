@@ -16,5 +16,6 @@ export async function getUserFitnessProfile(
     goal: profile?.goal ?? "build muscle",
     experience: profile?.experience ?? "intermediate",
     weightUnit: profile?.weightUnit ?? "kg",
+    workoutsPerWeekTarget: profile?.workoutsPerWeek ?? 4,
   };
 }

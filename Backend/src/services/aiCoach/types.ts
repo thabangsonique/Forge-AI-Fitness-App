@@ -33,3 +33,15 @@ export interface AiCoachInsightResponse {
   overall: OverallCoachSummary;
   generatedAt: string;
 }
+
+export type GenerateCoachInsightResult =
+  | {
+      success: true;
+      source: "cache" | "gemini";
+      data: AiCoachInsightResponse;
+    }
+  | {
+      success: false;
+      error: string;
+      retryAfterSeconds?: number;
+    };

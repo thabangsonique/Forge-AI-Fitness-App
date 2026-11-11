@@ -6,6 +6,7 @@ export type UserFitnessProfile = {
   goal: string;
   experience: string;
   weightUnit: string;
+  workoutsPerWeekTarget: number;
 };
 
 // 2. Training volume summary with true 4-week historical comparisons
@@ -55,12 +56,19 @@ export type TrainingGap = {
   reason: string;
 };
 
+export interface PersonalRecord {
+  exerciseName: string;
+  currentPR: number;
+  metricType: string;
+}
+
 // 7. Master "One-Page Lab Report" consumed by Gemini
 export type FitnessContext = {
   profile: UserFitnessProfile;
-  volumeTrend: VolumeTrend;
+  volume: VolumeTrend;
   muscleDistribution: MuscleVolumeSummary[];
   topStrengthTrends: ExerciseStrengthTrend[];
   recentMilestones: string[];
   trainingGaps: TrainingGap[];
+  personalRecords: PersonalRecord[];
 };

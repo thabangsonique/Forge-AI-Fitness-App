@@ -57,7 +57,7 @@ export default function ProfileHeader({
   onBack,
 }: ProfileHeaderProps) {
   const displayName = name?.trim() || "Athlete";
-  const displayEmail = email?.trim() || "No email on file";
+  const displayEmail = email?.trim() || "No email";
   const memberSince = getMemberSince(createdAt);
   const avatarSource: ImageSourcePropType = image
     ? { uri: image }

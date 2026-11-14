@@ -1,15 +1,14 @@
-import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
+import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import "dotenv/config";
-import { eq } from "drizzle-orm";
 import express from "express";
-import { db } from "./db";
-import { profiles } from "./db/schema";
 import { auth } from "./lib/auth";
+import { reconcileStaleReservations } from "./services/aiUsage/usageManagerservice";
 import aiCoachRoutes from "./routes/aiCoachRoutes";
 import aiWorkoutRoutes from "./routes/aiWorkoutRoutes";
 import exercisesRoutes from "./routes/exercisesRoutes";
 import personalRecordsRoutes from "./routes/personalRecordsRoutes";
+import profileRoutes from "./routes/profileRoutes";
 import scheduledWorkoutsRoutes from "./routes/scheduledWorkoutsRoutes";
 import statsRoutes from "./routes/statsRoutes";
 import workoutSessionRoutes from "./routes/workoutSessionsRoutes";
@@ -60,64 +59,26 @@ app.use("/api", scheduledWorkoutsRoutes);
 app.use("/api", personalRecordsRoutes);
 app.use("/api/ai", aiCoachRoutes);
 app.use("/api/ai", aiWorkoutRoutes);
-
-//STAND ALONE.
-//profile routes.
-app.post("/api/profile", async (req, res) => {
-  // Debug: log request details
-  console.log("PROFILE REQUEST - headers:", JSON.stringify(req.headers));
-  console.log("PROFILE REQUEST - body:", JSON.stringify(req.body));
-
-  try {
-    // get user session.
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
-
-    console.log("HERE IS THE SESSION TOKEN:", session);
-
-    if (!session || !session.user) {
-      return res.status(401).json({ error: "Unauthorized- no token found." });
-    }
-
-    //grab data from the body.
-    const { gender, experience, goal } = req.body;
-
-    if (!gender || !experience || !goal) {
-      return res.status(400).json({ error: "Missing fields are required." });
-    }
-
-    //check if user exists in profiles table.
-    const existingProfile = await db.query.profiles.findFirst({
-      where: eq(profiles.userId, session.user.id),
-    });
-
-    if (existingProfile) {
-      return res.status(200).json({ success: true, existingProfile });
-    }
-
-    //create profile if it doesnt exist.
-    const [newProfile] = await db
-      .insert(profiles)
-      .values({
-        gender,
-        experience,
-        goal,
-        userId: session.user.id,
-      })
-      .returning();
-
-    return res.status(200).json({ success: true, profile: newProfile });
-  } catch (error: any) {
-    console.error("Error creating profile", error);
-    return res.status(500).json({
-      error: error.message,
-    });
-  }
-});
+app.use("/api/profile", profileRoutes);
 
 const port = process.env.PORT || 3001;
 
-app.listen(port, () => {
-  console.log("SERVER IS RUNNING LIVE ON PORT:", port);
-});
+async function startServer() {
+  // Refund any AI requests that were left pending by a previous crash/restart
+  // before we start accepting new traffic. Failing to do this would leave trial
+  // credits permanently consumed.
+  try {
+    await reconcileStaleReservations();
+  } catch (error) {
+    console.error(
+      "[Startup] Failed to reconcile stale AI requests:",
+      error
+    );
+  }
+
+  app.listen(port, () => {
+    console.log("SERVER IS RUNNING LIVE ON PORT:", port);
+  });
+}
+
+startServer();

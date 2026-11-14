@@ -210,6 +210,7 @@ export const profiles = pgTable("profiles", {
   id: uuid().notNull().defaultRandom().primaryKey(),
   userId: text()
     .notNull()
+    .unique("profiles_user_id_unique")
     .references(() => user.id, { onDelete: "cascade" }),
   gender: genderEnum().notNull(),
   goal: goalEnum().notNull(),

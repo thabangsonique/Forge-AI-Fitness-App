@@ -12,19 +12,12 @@ const perfomanceOptions = [
   { title: "Muscle" },
   { title: "PRs" },
 ];
-export default function statistics() {
+export default function Statistics() {
   //STATES
   const [isActive, setIsActive] = useState("Volume");
 
   //QUERIES
-  const {
-    data: UserStats,
-    isLoading,
-    isError,
-    isSuccess,
-    isUninitialized,
-    status,
-  } = useGetUserStatsQuery();
+  const { data: UserStats, isLoading, isError } = useGetUserStatsQuery();
 
   // console.log("user stats:", UserStats?.exerciseBreakedown);
   return (

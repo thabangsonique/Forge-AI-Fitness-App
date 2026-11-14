@@ -62,7 +62,7 @@ const quickActions: QuickAction[] = [
   {
     icon: "calendar-alt",
     title: "My Plan",
-    href: "/(app)/(tabs)/workouts",
+    href: "/(app)/calendar/calendar",
   },
   {
     icon: "walking",

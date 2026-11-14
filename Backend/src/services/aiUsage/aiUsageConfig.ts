@@ -10,6 +10,10 @@ export interface AiConfig {
   maxInputTokensPerMinute: number;
   maxInputTokensPerRequest: number;
   model: string;
+  // Fallback model used when the primary model is temporarily overloaded.
+  fallbackModel: string;
+  // Hard per-request timeout so a stalled Gemini call can never hang forever.
+  requestTimeoutMs: number;
   // Forge Safety Buffer:
   globalDailyRequestCap: number;
   // Forge Business Usage Limits (Per User):
@@ -49,6 +53,16 @@ export const loadAiConfig = (): AiConfig => {
   }
 
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+
+  // If the primary model is overloaded (e.g. 503 UNAVAILABLE), retry once on
+  // a lighter sibling model instead of making the user wait for nothing.
+  const fallbackModel =
+    process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.7-flash";
+
+  // Abort a stalled Gemini request after this many milliseconds.
+  // 30s keeps the mobile UI responsive when Gemini is unavailable.
+  const requestTimeoutMs =
+    parseStrictPositiveInt(process.env.GEMINI_REQUEST_TIMEOUT_MS) || 30_000;
 
   const maxRequestsPerMinute = parseStrictPositiveInt(
     process.env.GEMINI_MAX_REQUESTS_PER_MINUTE
@@ -121,6 +135,8 @@ export const loadAiConfig = (): AiConfig => {
     aiEnabled: finalAiEnabled,
     apiKey,
     model,
+    fallbackModel,
+    requestTimeoutMs,
     maxRequestsPerMinute: maxRequestsPerMinute || 0,
     maxRequestsPerDay: maxRequestsPerDay || 0,
     maxInputTokensPerMinute: maxInputTokensPerMinute || 0,

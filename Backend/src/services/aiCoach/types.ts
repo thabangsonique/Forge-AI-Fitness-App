@@ -34,6 +34,16 @@ export interface AiCoachInsightResponse {
   generatedAt: string;
 }
 
+// Machine-readable reasons the app can map to a specific HTTP status and a
+// user-friendly message, instead of a single generic failure.
+export type CoachInsightFailureCode =
+  | "insufficient_data"
+  | "quota_exceeded"
+  | "rate_limited"
+  | "ai_busy"
+  | "ai_timeout"
+  | "generation_failed";
+
 export type GenerateCoachInsightResult =
   | {
       success: true;
@@ -43,5 +53,6 @@ export type GenerateCoachInsightResult =
   | {
       success: false;
       error: string;
+      failureCode?: CoachInsightFailureCode;
       retryAfterSeconds?: number;
     };

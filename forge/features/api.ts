@@ -6,15 +6,29 @@ import type {
 } from "@/shared/types";
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
+export type Gender = "male" | "female";
+export type FitnessGoal = "build muscle" | "lose fat" | "gain strength";
+export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
+export type WeightUnit = "kg" | "lb";
+
 export interface UserProfile {
   id: string;
   createdAt: Date;
   updatedAt: Date;
   userId: string;
-  gender: string;
-  goal: string;
-  experience: string;
-  weightUnit: string;
+  gender: Gender;
+  goal: FitnessGoal;
+  experience: ExperienceLevel;
+  workoutsPerWeek: number;
+  weightUnit: WeightUnit;
+}
+
+export interface UpdateProfileRequest {
+  gender?: Gender;
+  goal?: FitnessGoal;
+  experience?: ExperienceLevel;
+  workoutsPerWeek?: number;
+  weightUnit?: WeightUnit;
 }
 
 export interface ScheduledWorkouts {
@@ -211,6 +225,108 @@ export interface MuscleStrength {
   best1RM: number;
 }
 
+export interface AIMuscleFocusInsight {
+  title: string;
+  explanation: string;
+  neglectedMuscles: string[];
+  recommendations: string[];
+}
+
+export interface AiVolumeInsight {
+  title: string;
+  explanation: string;
+  trendStatus: "increasing" | "decreasing" | "consistent" | "insufficient_data";
+  recommendations: string[];
+}
+
+export interface AiStrengthInsight {
+  title: string;
+  praise: string;
+  progressionAnalysis: string;
+  exercisesToFocus: string[];
+}
+
+export interface AiOverallSummary {
+  headline: string;
+  detailedFeedback: string;
+  nextMilestone: string;
+  goalAlignment: string;
+}
+
+export interface AiCoachInsightResponse {
+  muscleFocus: AIMuscleFocusInsight;
+  volume: AiVolumeInsight;
+  strength: AiStrengthInsight;
+  overall: AiOverallSummary;
+  generatedAt: string;
+  fromCache?: boolean; // true if the backend returned a cached result
+}
+
+//tell user their trial standing.
+export interface AiTrialSummary {
+  isEligible: boolean;
+  isExpired: boolean;
+  daysRemaining: number;
+  insightsUsed: number;
+  insightsRemaining: number;
+  workoutGenerations: number;
+  workoutGenerationsRemaining: number;
+}
+
+export interface AiStatusResponse {
+  tier: "free" | "premium";
+  allowed: boolean;
+  reason?: string;
+  trialSummary?: AiTrialSummary;
+}
+
+//types for workout generation.
+
+//single exercise type
+export interface AiGeneratedExercise {
+  exerciseId: string;
+  exerciseName: string;
+  muscle: string;
+  sets: number;
+  reps: number;
+  restSeconds: number;
+  coachingTip: string;
+}
+
+//full generated workout type
+export interface AiGeneratedWorkoutPlan {
+  workoutName: string;
+  workoutCategory: string;
+  durationEstimateMinutes: number;
+  targetMuscles: string[];
+  exercises: AiGeneratedExercise[];
+  coachNote: string;
+}
+
+//Type the workout draft.
+export interface AiWorkoutDraftResponse {
+  success: boolean;
+  draftId: string;
+  workout: AiGeneratedWorkoutPlan;
+  generatedAt: string;
+}
+
+//Type for requests to be sent to Gemini.
+export interface GenerateWorkoutRequest {
+  mode: "custom" | "insight_driven";
+  targetMuscles?: string[]; // Required only when mode is "custom"
+  scheduledDate?: string; // ISO date string e.g. "2025-02-14"
+  preferredEquipment?: string[]; // Optional filter
+  durationMinutes?: number; // Optional target duration
+}
+
+//Type for the saved draft to workout response.
+export interface SaveWorkoutDraftResponse {
+  success: boolean;
+  workoutId: string;
+  workoutName: string;
+}
+
 export const api = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001",
@@ -234,6 +350,7 @@ export const api = createApi({
     "Exercises",
     "Progress",
     "Records",
+    "AiCoach",
   ],
 
   endpoints: (build) => ({
@@ -288,6 +405,35 @@ export const api = createApi({
           : [{ type: "ScheduledWorkouts", id: "LISt" }],
     }),
 
+    //scheduled workouts within an explicit date range (used by the calendar).
+    getScheduledWorkoutsInRange: build.query<
+      ScheduledWorkouts[],
+      { from: string; to: string }
+    >({
+      query: ({ from, to }) => ({
+        url: "/api/scheduled-workouts",
+        params: { from, to },
+      }),
+
+      transformResponse: (response: {
+        success: true;
+        scheduledWorkouts: ScheduledWorkouts[];
+      }) => {
+        return response.scheduledWorkouts;
+      },
+
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ workoutId }) => ({
+                type: "ScheduledWorkouts" as const,
+                id: workoutId,
+              })),
+              { type: "ScheduledWorkouts", id: "RANGE" },
+            ]
+          : [{ type: "ScheduledWorkouts", id: "RANGE" }],
+    }),
+
     //COMPLETED SESSIONS.
     getCompletedSessions: build.query<CompletedSessions[], void>({
       query: () => "/api/workouts/session-history",
@@ -332,6 +478,9 @@ export const api = createApi({
         },
         { type: "SessionHistory", id: "LIST" },
         "Progress",
+        // Logging a workout changes the insight fingerprint, so the cached
+        // insight query must refetch and report no_cache until regenerated.
+        "AiCoach",
       ],
     }),
 
@@ -456,11 +605,41 @@ export const api = createApi({
 
       providesTags: ["Records"],
     }),
+
+    //AI API ENDPOINTS
+    getCoachInsights: build.query<AiCoachInsightResponse | null, void>({
+      query: () => "/api/ai/coach/insights",
+
+      transformResponse: (response: {
+        success: true;
+        source: "cache" | "no_cache";
+        data: AiCoachInsightResponse | null;
+        generatedAt?: string;
+      }) => response.data ?? null,
+
+      providesTags: ["AiCoach"],
+    }),
+
+    generateCoachInsight: build.mutation<AiCoachInsightResponse, void>({
+      query: () => ({
+        url: "/api/ai/coach/insights",
+        method: "POST",
+      }),
+
+      transformResponse: (response: {
+        success: true;
+        source: "cache" | "gemini";
+        data: AiCoachInsightResponse;
+      }) => response.data,
+
+      invalidatesTags: ["AiCoach"],
+    }),
   }),
 });
 
 export const {
   useGetScheduledWorkoutsQuery,
+  useGetScheduledWorkoutsInRangeQuery,
   useGetCompletedSessionsQuery,
   useGetWorkoutSessionHistoryQuery,
   useGetAllWorkoutsQuery,
@@ -472,4 +651,6 @@ export const {
   useCreateWorkoutSessionMutation,
   useGetUserStatsQuery,
   useGetPersonalRecordsQuery,
+  useGenerateCoachInsightMutation,
+  useGetCoachInsightsQuery,
 } = api;

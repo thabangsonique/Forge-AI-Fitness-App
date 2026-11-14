@@ -273,23 +273,54 @@ export const getScheduledWorkouts = async (req: Request, res: Response) => {
     }
 
     const userId = session.user.id;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    //identif sunday of the week.
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
+    const fromParam = typeof req.query.from === "string" ? req.query.from : null;
+    const toParam = typeof req.query.to === "string" ? req.query.to : null;
 
-    //identify saturday of the week.
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    //require both range params or neither.
+    if ((fromParam && !toParam) || (!fromParam && toParam)) {
+      return res
+        .status(400)
+        .json({ error: "Provide both 'from' and 'to', or neither." });
+    }
+
+    let rangeStart: Date;
+    let rangeEnd: Date;
+
+    if (fromParam && toParam) {
+      rangeStart = new Date(fromParam);
+      rangeEnd = new Date(toParam);
+
+      if (
+        Number.isNaN(rangeStart.getTime()) ||
+        Number.isNaN(rangeEnd.getTime())
+      ) {
+        return res.status(400).json({ error: "Invalid from/to date." });
+      }
+
+      if (rangeStart > rangeEnd) {
+        return res.status(400).json({ error: "'from' must be before 'to'." });
+      }
+    } else {
+      //keep original behaviour for the home screen (current week).
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      //identify sunday of the week.
+      rangeStart = new Date(today);
+      rangeStart.setDate(today.getDate() - today.getDay());
+
+      //identify saturday of the week.
+      rangeEnd = new Date(rangeStart);
+      rangeEnd.setDate(rangeEnd.getDate() + 6);
+      rangeEnd.setHours(23, 59, 59, 999);
+    }
 
     const scheduled = await db.query.scheduledWorkouts.findMany({
       where: and(
         eq(scheduledWorkouts.userId, userId),
-        gte(scheduledWorkouts.scheduledDate, startOfWeek),
-        lte(scheduledWorkouts.scheduledDate, endOfWeek)
+        gte(scheduledWorkouts.scheduledDate, rangeStart),
+        lte(scheduledWorkouts.scheduledDate, rangeEnd)
       ),
       orderBy: (scheduledWorkouts, { asc }) => [
         asc(scheduledWorkouts.scheduledDate),

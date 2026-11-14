@@ -1,6 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "../../db";
-import { aiInsights } from "../../db/schema";
+import { aiInsights, aiUsageEvents } from "../../db/schema";
 import { checkGlobalAiQuota } from "./aiQuotaService";
 import { loadAiConfig } from "./aiUsageConfig";
 import { checkUserEntitlement } from "./subscriptionService";
@@ -50,6 +50,46 @@ export const getCachedInsight = async <T = unknown>(
   return {
     hit: false,
   };
+};
+
+// Refund and fail reservations that were abandoned (for example, the server
+// restarted while a Gemini request was still in flight). Without this, those
+// requests stay "pending" forever and permanently consume a trial credit.
+export const reconcileStaleReservations = async (
+  maxAgeMinutes = 2
+): Promise<number> => {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+
+  const staleEvents = await db
+    .select({
+      id: aiUsageEvents.id,
+      userId: aiUsageEvents.userId,
+      feature: aiUsageEvents.feature,
+    })
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.status, "pending"),
+        lt(aiUsageEvents.createdAt, cutoff)
+      )
+    );
+
+  for (const event of staleEvents) {
+    await releaseReservation({
+      reservationId: event.id,
+      userId: event.userId,
+      feature: event.feature as AiFeatureType,
+      errorMessage: "Stale pending AI request automatically reconciled.",
+    });
+  }
+
+  if (staleEvents.length > 0) {
+    console.log(
+      `[AI Usage] Reconciled ${staleEvents.length} stale pending request(s).`
+    );
+  }
+
+  return staleEvents.length;
 };
 
 //save generated insight inside cached table

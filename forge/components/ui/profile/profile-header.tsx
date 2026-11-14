@@ -63,25 +63,33 @@ export default function ProfileHeader({
     ? { uri: image }
     : fallbackProfileImage;
 
+  const showBackButton = Boolean(canGoBack && onBack);
+
   return (
     <View className="items-center">
-      <View className="h-12 w-full flex-row items-center justify-center">
-        {canGoBack && onBack ? (
+      <View className="h-14 w-full flex-row items-center">
+        {showBackButton ? (
           <Pressable
             accessibilityLabel="Go back"
             accessibilityRole="button"
             hitSlop={12}
             onPress={onBack}
-            className="absolute left-0 h-11 w-11 items-center justify-center rounded-full bg-muted/10 active:opacity-60"
+            className="h-10 w-10 items-center justify-center rounded-full bg-muted/10 active:opacity-60"
           >
-            <Feather name="chevron-left" size={24} color="white" />
+            <Feather name="chevron-left" size={20} color="white" />
           </Pressable>
-        ) : null}
+        ) : (
+          <View className="h-10 w-10" />
+        )}
 
-        <Text className="text-lg font-semibold text-white">Profile</Text>
+        <Text className="flex-1 text-center text-lg font-semibold text-white">
+          Profile
+        </Text>
+
+        <View className="h-10 w-10" />
       </View>
 
-      <View className="mt-5 h-28 w-28 overflow-hidden rounded-full border-2 border-primary/40 bg-muted/10">
+      <View className="mt-5 h-28 w-28 overflow-hidden rounded-full border border-white/10 bg-muted/10">
         <Image
           source={avatarSource}
           className="h-full w-full"
@@ -89,11 +97,11 @@ export default function ProfileHeader({
         />
       </View>
 
-      <Text className="mt-4 text-xl font-bold text-white">{displayName}</Text>
+      <Text className="mt-3 text-xl font-bold text-white">{displayName}</Text>
       <Text className="mt-1 text-sm text-muted-2">{displayEmail}</Text>
 
       {memberSince ? (
-        <Text className="mt-1 text-xs text-muted-2/60">
+        <Text className="mt-1 text-xs text-muted-3">
           Member since {memberSince}
         </Text>
       ) : null}

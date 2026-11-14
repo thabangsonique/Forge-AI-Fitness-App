@@ -58,7 +58,7 @@ export default function Profile() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingHorizontal: 20,
-          paddingTop: 20,
+          paddingTop: 16,
           paddingBottom: 150,
         }}
       >
@@ -73,7 +73,7 @@ export default function Profile() {
 
         {isLoading ? (
           <View className="mt-8 h-40 items-center justify-center">
-            <ActivityIndicator color="#dae86aff" />
+            <ActivityIndicator className="text-primary" />
             <Text className="mt-3 text-sm text-muted-2">
               Loading your profile...
             </Text>

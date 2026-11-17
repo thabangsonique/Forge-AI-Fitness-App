@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import type { GenerateContentResponse } from "@google/genai";
 import { eq } from "drizzle-orm";
 import { db } from "../../db";
 import {
@@ -7,6 +7,11 @@ import {
   workoutExercises,
   workouts,
 } from "../../db/schema";
+import {
+  getGeminiClient,
+  getGeminiThinkingConfig,
+  isGemini3Model,
+} from "../ai/geminiClient";
 import { loadAiConfig } from "../aiUsage/aiUsageConfig";
 import {
   abortAiExecution,
@@ -29,6 +34,27 @@ import {
   WORKOUT_RESPONSE_JSON_SCHEMA,
   WORKOUT_SYSTEM_INSTRUCTION,
 } from "./workoutPromptBuilder";
+
+// Safely extract the HTTP status from an unknown Gemini/network error.
+const getGeminiErrorStatus = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+
+  const possibleStatuses = [
+    (error as { status?: unknown }).status,
+    (error as { statusCode?: unknown }).statusCode,
+    (error as { cause?: { status?: unknown } }).cause?.status,
+  ];
+
+  for (const status of possibleStatuses) {
+    if (typeof status === "number") {
+      return status;
+    }
+  }
+
+  return undefined;
+};
 
 export const generateUserWorkout = async (
   userId: string,
@@ -71,13 +97,17 @@ export const generateUserWorkout = async (
   //Reservation created automatically when prepare execution passes. Get the reservation.
   const reservation = gate.reservation!; //request pending.
 
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort();
+  }, config.requestTimeoutMs);
+  const startedAt = Date.now();
+
   //actual prompt sending to Gemini.
   try {
     const userProfile = await getUserFitnessProfile(userId);
 
-    const ai = new GoogleGenAI({
-      apiKey: config.apiKey,
-    });
+    const ai = getGeminiClient(config.apiKey);
 
     const promptText = await buildWorkout({
       targetMuscles,
@@ -87,17 +117,62 @@ export const generateUserWorkout = async (
       userExperience: userProfile.experience,
     });
 
-    //content and data we are sending to gemini.
-    const response = await ai.models.generateContent({
-      model: config.model,
-      contents: promptText,
-      config: {
-        systemInstruction: WORKOUT_SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseJsonSchema: WORKOUT_RESPONSE_JSON_SCHEMA as any,
-        temperature: 0.7,
-      },
-    });
+    // Try the primary model first, then the fallback model if the primary is
+    // temporarily overloaded (503/429/5xx).
+    const modelsToTry = Array.from(
+      new Set([config.model, config.fallbackModel].filter(Boolean))
+    );
+
+    let response: GenerateContentResponse | undefined;
+    let lastError: unknown;
+
+    for (const model of modelsToTry) {
+      try {
+        //content and data we are sending to gemini.
+        response = await ai.models.generateContent({
+          model,
+          contents: promptText,
+          config: {
+            systemInstruction: WORKOUT_SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+            responseJsonSchema: WORKOUT_RESPONSE_JSON_SCHEMA as any,
+            thinkingConfig: getGeminiThinkingConfig(
+              model,
+              config.thinkingLevel
+            ),
+            maxOutputTokens: config.maxOutputTokens,
+            abortSignal: timeoutController.signal,
+
+            ...(isGemini3Model(model) ? {} : { temperature: 0.7 }),
+          },
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+
+        // If the overall timeout fired, do not try another model.
+        if (timeoutController.signal.aborted) {
+          throw error;
+        }
+
+        const status = getGeminiErrorStatus(error);
+        const isTemporary = [408, 429, 500, 502, 503, 504].includes(
+          status ?? -1
+        );
+
+        if (!isTemporary) {
+          throw error;
+        }
+
+        console.warn(
+          `[Gemini Workout] ${model} is overloaded right now; trying the fallback model.`
+        );
+      }
+    }
+
+    if (!response) {
+      throw lastError ?? new Error("Gemini did not return a response.");
+    }
 
     //convert gemini response to string.
     const rawJsonText = response.text || "{}";
@@ -135,6 +210,12 @@ export const generateUserWorkout = async (
     const inputTokens = usage?.promptTokenCount || 0;
     const outputTokens = usage?.candidatesTokenCount || 0;
 
+    console.log(
+      `[Gemini Workout] completed in ${Date.now() - startedAt}ms (thoughts: ${
+        usage?.thoughtsTokenCount ?? 0
+      })`
+    );
+
     await completeAiExecution({
       reservationId: reservation.reservationId,
       userId,
@@ -167,11 +248,17 @@ export const generateUserWorkout = async (
       errorMessage: error.message || "Failed to generate workout.",
     });
 
+    const timedOut = timeoutController.signal.aborted;
+
     return {
       success: false,
-      error:
-        "Unable to generate workout right now. Your trial allowance has been preserved. Please try again.",
+      error: timedOut
+        ? "The AI took too long to respond. Your trial allowance has been preserved. Please try again."
+        : "Unable to generate workout right now. Your trial allowance has been preserved. Please try again.",
+      retryAfterSeconds: timedOut ? 30 : undefined,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 

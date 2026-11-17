@@ -205,6 +205,11 @@ export const experienceEnum = pgEnum("experience", [
   "advanced",
 ]);
 export const weightUnitEnum = pgEnum("weight_unit", ["kg", "lb"]);
+export const trainingLocationEnum = pgEnum("training_location", [
+  "gym",
+  "home",
+  "bodyweight",
+]);
 
 export const profiles = pgTable("profiles", {
   id: uuid().notNull().defaultRandom().primaryKey(),
@@ -216,7 +221,18 @@ export const profiles = pgTable("profiles", {
   goal: goalEnum().notNull(),
   experience: experienceEnum().notNull(),
   workoutsPerWeek: integer("workouts_per_week").notNull().default(4),
+  trainingLocation: trainingLocationEnum("training_location"),
+  heightCm: real("height_cm"),
+  weightKg: real("weight_kg"),
   weightUnit: weightUnitEnum().notNull().default("kg"),
+  birthYear: integer("birth_year"),
+  preferredDays: jsonb("preferred_days").$type<number[]>(), // 0 = Sunday
+  reminderEnabled: boolean("reminder_enabled").notNull().default(false),
+  reminderTime: text("reminder_time"),
+  painPoints: jsonb("pain_points").$type<string[]>(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true })
     .notNull()
@@ -234,6 +250,11 @@ export const workouts = pgTable("workouts", {
   workoutType: workoutTypeEnum().notNull().default("user"),
   image: text(),
   category: text(),
+  goal: goalEnum("goal"),
+  experience: experienceEnum("experience"),
+  trainingLocation: trainingLocationEnum("training_location"),
+  daysPerWeek: integer("days_per_week"),
+  splitType: text("split_type"),
   isTemplate: boolean().notNull().default(false),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp({ withTimezone: true })

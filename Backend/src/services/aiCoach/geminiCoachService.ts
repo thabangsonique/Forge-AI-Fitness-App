@@ -1,9 +1,14 @@
 //actual gemini execution.
 
-import { GoogleGenAI, type GenerateContentResponse } from "@google/genai";
+import type { GenerateContentResponse } from "@google/genai";
 import { count, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { workoutSession } from "../../db/schema";
+import {
+  getGeminiClient,
+  getGeminiThinkingConfig,
+  isGemini3Model,
+} from "../ai/geminiClient";
 import { loadAiConfig } from "../aiUsage/aiUsageConfig";
 import {
   abortAiExecution,
@@ -250,11 +255,11 @@ export const generateUserCoachInsight = async (
     timeoutController.abort();
   }, config.requestTimeoutMs);
 
+  const startedAt = Date.now();
+
   //sending info to google gemini
   try {
-    const ai = new GoogleGenAI({
-      apiKey: config.apiKey,
-    });
+    const ai = getGeminiClient(config.apiKey);
 
     const promptText = buildCaochPrompt(fitnessContext);
 
@@ -278,9 +283,14 @@ export const generateUserCoachInsight = async (
                 systemInstruction: COACH_SYSTEM_INSTRUCTION,
                 responseMimeType: "application/json",
                 responseJsonSchema: COACH_RESPONSE_JSON_SCHEMA as any,
-                temperature: 0.7,
-
+                thinkingConfig: getGeminiThinkingConfig(
+                  model,
+                  config.thinkingLevel
+                ),
+                maxOutputTokens: config.maxOutputTokens,
                 abortSignal: signal,
+
+                ...(isGemini3Model(model) ? {} : { temperature: 0.7 }),
 
                 httpOptions: {
                   timeout: config.requestTimeoutMs,
@@ -337,6 +347,12 @@ export const generateUserCoachInsight = async (
     const inputTokens = usage?.promptTokenCount || 0;
     const outputTokens = usage?.candidatesTokenCount || 0;
     const totalTokens = usage?.totalTokenCount || inputTokens + outputTokens;
+
+    console.log(
+      `[Gemini Coach] completed in ${Date.now() - startedAt}ms (thoughts: ${
+        usage?.thoughtsTokenCount ?? 0
+      })`
+    );
 
     //Finalize the AI request.
     await completeAiExecution({

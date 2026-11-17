@@ -1,8 +1,9 @@
 import {
   getOnboardingAnswers,
-  resetOnboardingAnswers,
+  hydrateOnboardingAnswers,
 } from "@/constants/onboarding";
 import { authClient } from "@/lib/auth-client";
+import { completeOnboardingAfterAuth } from "@/lib/onboarding-completion";
 import {
   signUpFormValues,
   signUpSchema,
@@ -52,12 +53,16 @@ export default function SignUp() {
 
   //function to handle login.
   const onSubmit = handleSubmit(async ({ email, password, fullName }) => {
+    await hydrateOnboardingAnswers();
+
     const result = getOnboardingAnswers();
 
-    // console.log(result);
-
     if (!result.success) {
-      router.replace("/welcome");
+      Alert.alert(
+        "Answers missing",
+        "Please finish your plan before creating an account.",
+        [{ text: "OK", onPress: () => router.replace("/intro") }]
+      );
       return;
     }
 
@@ -75,40 +80,19 @@ export default function SignUp() {
         return;
       }
 
-      //grab the user session token from expo-secure store.
-      const sessionResults = await authClient.getSession();
+      const completion = await completeOnboardingAfterAuth();
 
-      const token = sessionResults.data?.session?.token;
-
-      if (!token) {
-        throw new Error("Sign up was succesful but token was not created.");
+      if (completion.missingAnswers) {
+        router.replace("/(app)/(tabs)");
+        return;
       }
 
-      //backend to add profile for this user.
-      //save onboarding data into the profiles table via backend.
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/profile`,
-
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(result.data),
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Could not save your profile. Server said: ${errorText}`
-        );
+      if (!completion.success) {
+        router.replace("/finish-signup");
+        return;
       }
 
-      resetOnboardingAnswers();
-      //take the user to the hime page.
-      router.replace("/(app)/(tabs)");
+      router.replace("/reminders");
     } catch (err: any) {
       Alert.alert("Network error", err.message);
     } finally {
@@ -118,10 +102,16 @@ export default function SignUp() {
 
   //google login.
   const handleGoogleSignUp = async () => {
+    await hydrateOnboardingAnswers();
+
     const result = getOnboardingAnswers();
 
     if (!result.success) {
-      router.replace("/welcome");
+      Alert.alert(
+        "Answers missing",
+        "Please finish your plan before creating an account.",
+        [{ text: "OK", onPress: () => router.replace("/intro") }]
+      );
       return;
     }
 
@@ -130,8 +120,12 @@ export default function SignUp() {
     try {
       const { error } = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/(app)/(tabs)",
+        callbackURL: "/finish-signup",
       });
+
+      if (error) {
+        Alert.alert("Could not continue with Google", error.message);
+      }
     } catch (error: any) {
       Alert.alert("Network error", error.message);
     } finally {
@@ -148,9 +142,11 @@ export default function SignUp() {
         <View className="flex-grow px-5 py-5">
           {/* heading text */}
           <Text className="text-2xl font-bold tracking-widest text-primary">
-            Create account
+            Save your plan
           </Text>
-          <Text className="text-muted/80">Sign up to get started</Text>
+          <Text className="text-muted/80">
+            Create an account to keep your plan, progress, and PRs.
+          </Text>
 
           {/* sign up form */}
           <View className="mt-9">
@@ -304,7 +300,7 @@ export default function SignUp() {
               <ActivityIndicator />
             ) : (
               <>
-                <Text className="text-lg text-black"> Sign Up</Text>
+                <Text className="text-lg text-black">Create account</Text>
               </>
             )}
           </Pressable>

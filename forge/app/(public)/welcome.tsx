@@ -68,10 +68,7 @@ export default function welcome() {
             onPress={() => {
               // console.log("BUTTON PRESSED");
 
-              router.push({
-                pathname: "/onboarding/[step]",
-                params: { step: "gender" },
-              });
+              router.push("/intro");
             }}
             style={({ pressed }) => ({
               opacity: pressed ? 0.5 : 1,

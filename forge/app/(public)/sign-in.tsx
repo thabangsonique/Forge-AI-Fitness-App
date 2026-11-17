@@ -53,7 +53,8 @@ export default function SignIn() {
       });
 
       if (error) {
-        Alert.alert("Failed to sign in.Please try again.", error.message);
+        Alert.alert("Failed to sign in. Please try again.", error.message);
+        return;
       }
 
       //redirect user to the homepage.

@@ -3,10 +3,12 @@ import cors from "cors";
 import "dotenv/config";
 import express from "express";
 import { auth } from "./lib/auth";
+import { loadAiConfig } from "./services/aiUsage/aiUsageConfig";
 import { reconcileStaleReservations } from "./services/aiUsage/usageManagerservice";
 import aiCoachRoutes from "./routes/aiCoachRoutes";
 import aiWorkoutRoutes from "./routes/aiWorkoutRoutes";
 import exercisesRoutes from "./routes/exercisesRoutes";
+import onboardingRoutes from "./routes/onboardingRoutes";
 import personalRecordsRoutes from "./routes/personalRecordsRoutes";
 import profileRoutes from "./routes/profileRoutes";
 import scheduledWorkoutsRoutes from "./routes/scheduledWorkoutsRoutes";
@@ -59,6 +61,7 @@ app.use("/api", scheduledWorkoutsRoutes);
 app.use("/api", personalRecordsRoutes);
 app.use("/api/ai", aiCoachRoutes);
 app.use("/api/ai", aiWorkoutRoutes);
+app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/profile", profileRoutes);
 
 const port = process.env.PORT || 3001;
@@ -75,6 +78,11 @@ async function startServer() {
       error
     );
   }
+
+  const aiConfig = loadAiConfig();
+  console.log(
+    `[AI Config] model=${aiConfig.model} fallback=${aiConfig.fallbackModel} thinking=${aiConfig.thinkingLevel} maxOutputTokens=${aiConfig.maxOutputTokens} timeoutMs=${aiConfig.requestTimeoutMs}`
+  );
 
   app.listen(port, () => {
     console.log("SERVER IS RUNNING LIVE ON PORT:", port);

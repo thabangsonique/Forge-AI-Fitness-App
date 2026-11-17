@@ -1,5 +1,8 @@
 import { DEFAULT_FORGE_BUSINESS_LIMITS } from "./types";
 
+export const AI_THINKING_LEVELS = ["low", "medium", "high"] as const;
+export type AiThinkingLevel = (typeof AI_THINKING_LEVELS)[number];
+
 export interface AiConfig {
   aiEnabled: boolean;
   apiKey: string;
@@ -14,6 +17,11 @@ export interface AiConfig {
   fallbackModel: string;
   // Hard per-request timeout so a stalled Gemini call can never hang forever.
   requestTimeoutMs: number;
+  // Gemini 3 reasoning depth. Low keeps structured JSON generation fast;
+  // Gemini 3.8 Flash rejects MINIMAL, so low is the fastest supported level.
+  thinkingLevel: AiThinkingLevel;
+  // Upper bound on generated text so a looping response cannot run forever.
+  maxOutputTokens: number;
   // Forge Safety Buffer:
   globalDailyRequestCap: number;
   // Forge Business Usage Limits (Per User):
@@ -52,17 +60,29 @@ export const loadAiConfig = (): AiConfig => {
     errors.push("GEMINI_API_KEY is missing from environment variables.");
   }
 
-  const model = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+  // Gemini 3.8 Flash can stall past 30s even for tiny prompts. Gemini 3.6
+  // Flash is the fastest reliable sibling currently exposed to this project.
+  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
 
   // If the primary model is overloaded (e.g. 503 UNAVAILABLE), retry once on
   // a lighter sibling model instead of making the user wait for nothing.
   const fallbackModel =
-    process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.7-flash";
+    process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash";
 
   // Abort a stalled Gemini request after this many milliseconds.
   // 30s keeps the mobile UI responsive when Gemini is unavailable.
   const requestTimeoutMs =
     parseStrictPositiveInt(process.env.GEMINI_REQUEST_TIMEOUT_MS) || 30_000;
+
+  const rawThinkingLevel = process.env.GEMINI_THINKING_LEVEL?.trim().toLowerCase();
+  const thinkingLevel: AiThinkingLevel = AI_THINKING_LEVELS.includes(
+    rawThinkingLevel as AiThinkingLevel
+  )
+    ? (rawThinkingLevel as AiThinkingLevel)
+    : "low";
+
+  const maxOutputTokens =
+    parseStrictPositiveInt(process.env.GEMINI_MAX_OUTPUT_TOKENS) || 1500;
 
   const maxRequestsPerMinute = parseStrictPositiveInt(
     process.env.GEMINI_MAX_REQUESTS_PER_MINUTE
@@ -137,6 +157,8 @@ export const loadAiConfig = (): AiConfig => {
     model,
     fallbackModel,
     requestTimeoutMs,
+    thinkingLevel,
+    maxOutputTokens,
     maxRequestsPerMinute: maxRequestsPerMinute || 0,
     maxRequestsPerDay: maxRequestsPerDay || 0,
     maxInputTokensPerMinute: maxInputTokensPerMinute || 0,

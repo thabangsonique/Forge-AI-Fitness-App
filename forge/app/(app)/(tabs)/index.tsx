@@ -1,14 +1,16 @@
 import {
   getOnboardingAnswers,
-  resetOnboardingAnswers,
+  hydrateOnboardingAnswers,
 } from "@/constants/onboarding";
 import {
   useGetAllWorkoutsQuery,
   useGetCompletedSessionsQuery,
+  useGetProfileQuery,
   useGetScheduledWorkoutsQuery,
   useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
 import { authClient } from "@/lib/auth-client";
+import { completeOnboardingAfterAuth } from "@/lib/onboarding-completion";
 import { formatTrainedTime } from "@/utils/formatDuration";
 import { Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -203,7 +205,7 @@ const getDayIcon = (day: DayData) => {
 };
 
 //ACTUAL PAGE COMPONENT.
-export default function index() {
+export default function HomeScreen() {
   //STATES
   const [isPressed, setIsPressed] = React.useState(false);
   const [calenderDays, setCalenderDays] = useState<DayData[]>([]);
@@ -215,6 +217,7 @@ export default function index() {
     data: ScheduledWorkouts,
     isLoading: scheduledLoading,
     error: scheduledError,
+    refetch: refetchScheduledWorkouts,
   } = useGetScheduledWorkoutsQuery();
   const {
     data: completedSessions,
@@ -232,6 +235,12 @@ export default function index() {
     isLoading: workoutsLoading,
     error: workoutsError,
   } = useGetAllWorkoutsQuery();
+
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+  } = useGetProfileQuery();
 
   //FIND SCHEDULED WORKOUT.
   const nextScheduledWorkout = useMemo(() => {
@@ -298,37 +307,48 @@ export default function index() {
   //PROFILE SYNCING USEEFFECT.
   useEffect(() => {
     const syncProfileIfNeeded = async () => {
-      //check if user filled in the answers.
       const result = getOnboardingAnswers();
 
       if (!result.success) return;
 
-      //get the token for backend requests.
-      const sessionResults = await authClient.getSession();
+      const completion = await completeOnboardingAfterAuth();
 
-      const token = sessionResults.data?.session?.token;
-      if (!token) return;
-
-      //call backend to save profile.
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/profile`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(result.data),
-        }
-      );
-
-      if (response.ok) {
-        resetOnboardingAnswers();
+      if (completion.success) {
+        refetchScheduledWorkouts();
       }
     };
 
     syncProfileIfNeeded();
-  }, []);
+  }, [refetchScheduledWorkouts]);
+
+  useEffect(() => {
+    if (profileLoading || profileError) {
+      return;
+    }
+
+    let isActive = true;
+
+    const checkOnboarding = async () => {
+      await hydrateOnboardingAnswers();
+
+      if (!isActive) {
+        return;
+      }
+
+      if (
+        !profile?.onboardingCompletedAt &&
+        !getOnboardingAnswers().success
+      ) {
+        router.replace("/intro");
+      }
+    };
+
+    checkOnboarding();
+
+    return () => {
+      isActive = false;
+    };
+  }, [profile, profileError, profileLoading, router]);
 
   //FUNCTIONS
   // logout function.

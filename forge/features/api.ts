@@ -21,6 +21,15 @@ export interface UserProfile {
   experience: ExperienceLevel;
   workoutsPerWeek: number;
   weightUnit: WeightUnit;
+  trainingLocation: "gym" | "home" | "bodyweight" | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  birthYear: number | null;
+  preferredDays: number[] | null;
+  reminderEnabled: boolean;
+  reminderTime: string | null;
+  painPoints: string[] | null;
+  onboardingCompletedAt: Date | null;
 }
 
 export interface UpdateProfileRequest {
@@ -29,6 +38,14 @@ export interface UpdateProfileRequest {
   experience?: ExperienceLevel;
   workoutsPerWeek?: number;
   weightUnit?: WeightUnit;
+  trainingLocation?: "gym" | "home" | "bodyweight" | null;
+  heightCm?: number | null;
+  weightKg?: number | null;
+  birthYear?: number | null;
+  preferredDays?: number[] | null;
+  reminderEnabled?: boolean;
+  reminderTime?: string | null;
+  painPoints?: string[] | null;
 }
 
 export interface ScheduledWorkouts {
@@ -351,6 +368,7 @@ export const api = createApi({
     "Progress",
     "Records",
     "AiCoach",
+    "Profile",
   ],
 
   endpoints: (build) => ({
@@ -381,6 +399,15 @@ export const api = createApi({
         method: "DELETE",
       }),
       invalidatesTags: ["Workouts", "ScheduledWorkouts"],
+    }),
+
+    getProfile: build.query<UserProfile | null, void>({
+      query: () => "/api/profile",
+      transformResponse: (response: {
+        success: boolean;
+        profile: UserProfile | null;
+      }) => response.profile,
+      providesTags: ["Profile"],
     }),
 
     getScheduledWorkouts: build.query<ScheduledWorkouts[], void>({
@@ -645,6 +672,7 @@ export const {
   useGetAllWorkoutsQuery,
   useGetWorkoutsBySearchQuery,
   useGetExercisesQuery,
+  useGetProfileQuery,
   useCreateWorkoutMutation,
   useUpdateWorkoutMutation,
   useDeleteWorkoutMutation,

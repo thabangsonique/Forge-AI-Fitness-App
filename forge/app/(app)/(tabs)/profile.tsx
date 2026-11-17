@@ -13,6 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ProfileHeader from "@/components/ui/profile/profile-header";
 import ProfileRow from "@/components/ui/profile/profile-row";
 import ProfileSection from "@/components/ui/profile/profile-section";
+import { resetOnboardingAnswers } from "@/constants/onboarding";
+import { useTour } from "@/features/tour/useTour";
 import {
   useGetCompletedSessionsQuery,
   useGetPersonalRecordsQuery,
@@ -68,6 +70,9 @@ export default function Profile() {
   } = useSession();
 
   const userId = session?.user?.id;
+
+  // Progressive tour. Reset on sign-out so the next account starts clean.
+  const tour = useTour();
 
   const {
     data: stats,
@@ -162,8 +167,17 @@ export default function Profile() {
     try {
       await authClient.signOut();
     } finally {
+      await resetOnboardingAnswers();
+      tour.reset();
       router.replace("/welcome");
     }
+  };
+
+  // Restarting clears every stage, so TourHost re-binds the tour to this user
+  // and the journey begins again at stage 1 on the Home screen.
+  const handleReplayTour = () => {
+    tour.reset();
+    router.replace("/(app)/(tabs)");
   };
 
   // TODO: wire each row to the edit modal once field updates are implemented.
@@ -356,6 +370,11 @@ export default function Profile() {
             </ProfileSection>
 
             <ProfileSection title="Account">
+              <ProfileRow
+                icon={<Feather name="help-circle" size={20} color="greenyellow" />}
+                label="Replay Forge tour"
+                onPress={handleReplayTour}
+              />
               <ProfileRow
                 destructive
                 icon={<Feather name="log-out" size={20} color="red" />}

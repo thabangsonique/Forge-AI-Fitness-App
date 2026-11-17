@@ -31,51 +31,91 @@ export const createWorkout = async (req: Request, res: Response) => {
     //if token found. grab data from the body.
     const { name, description, category, exercises, scheduledDate } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ error: "Name is required" });
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({
+        error: "A valid workout name is required.",
+      });
+    }
+
+    if (exercises !== undefined && !Array.isArray(exercises)) {
+      return res.status(400).json({
+        error: "Exercises must be an array.",
+      });
+    }
+
+    const workoutExercisesList = exercises ?? [];
+
+    if (
+      workoutExercisesList.some(
+        (ex: any) =>
+          !ex ||
+          typeof ex !== "object" ||
+          ex.exerciseId === undefined ||
+          ex.exerciseId === null
+      )
+    ) {
+      return res.status(400).json({
+        error: "Every exercise must have a valid exercise ID.",
+      });
+    }
+
+    //verify if schedule date is a number.
+
+    let date: Date | null = null;
+
+    if (scheduledDate) {
+      date = new Date(scheduledDate);
+
+      if (isNaN(date.getTime())) {
+        return res.status(400).json({
+          error: "Invalid scheduled date.",
+        });
+      }
     }
 
     //create the workout.
-    const [newWorkout] = await db
-      .insert(workouts)
-      .values({
-        name,
-        description: description || null,
-        userId: session.user.id,
-        category: category || null,
-        isTemplate: false,
-      })
-      .returning();
+    const newWorkout = await db.transaction(async (tx) => {
+      const [workout] = await tx
+        .insert(workouts)
+        .values({
+          name: name.trim(),
+          description: description || null,
+          userId: session.user.id,
+          category: category || null,
+          isTemplate: false,
+        })
+        .returning();
 
-    if (exercises && exercises.length > 0 && Array.isArray(exercises)) {
-      const addedExercises = exercises.map((ex: any, index) => ({
-        userId: session.user.id,
-        workoutId: newWorkout.id,
-        exerciseId: ex.exerciseId,
-        restSeconds: ex.restSeconds,
-        sets: ex.sets,
-        reps: ex.reps,
-        position: index,
-      }));
+      if (workoutExercisesList.length > 0) {
+        const addedExercises = workoutExercisesList.map(
+          (ex: any, index: number) => ({
+            userId: session.user.id,
 
-      //add the exercises.
-      await db.insert(workoutExercises).values(addedExercises);
-    }
+            workoutId: workout.id,
+            exerciseId: ex.exerciseId,
+            restSeconds: ex.restSeconds,
+            sets: ex.sets,
+            reps: ex.reps,
+            position: index,
+          })
+        );
 
-    if (scheduledDate) {
-      const date = new Date(scheduledDate);
-
-      if (isNaN(date.getTime())) {
-        return res.status(400).json({ error: "Invalid scheduled date." });
+        //insert inside workoutexercises table.
+        await tx.insert(workoutExercises).values(addedExercises);
       }
 
-      await db.insert(scheduledWorkouts).values({
-        workoutId: newWorkout.id,
-        userId: session.user.id,
-        scheduledDate: date,
-        createdAt: new Date(),
-      });
-    }
+      // Insert scheduled workout
+      if (date) {
+        await tx.insert(scheduledWorkouts).values({
+          workoutId: workout.id,
+          userId: session.user.id,
+          scheduledDate: date,
+          createdAt: new Date(),
+        });
+      }
+
+      return workout;
+    });
 
     return res.status(200).json({ success: true, workout: newWorkout });
   } catch (error: any) {
@@ -274,7 +314,8 @@ export const getScheduledWorkouts = async (req: Request, res: Response) => {
 
     const userId = session.user.id;
 
-    const fromParam = typeof req.query.from === "string" ? req.query.from : null;
+    const fromParam =
+      typeof req.query.from === "string" ? req.query.from : null;
     const toParam = typeof req.query.to === "string" ? req.query.to : null;
 
     //require both range params or neither.

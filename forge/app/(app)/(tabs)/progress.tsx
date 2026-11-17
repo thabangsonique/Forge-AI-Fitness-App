@@ -1,11 +1,13 @@
+import TourCallout from "@/components/tour/TourCallout";
 import VolumeScreen from "@/components/ui/volumeScreen";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import MuscleScreen from "@/components/ui/muscleScreen";
 import PrScreen from "@/components/ui/prScreen";
 import { useGetUserStatsQuery } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 
 const perfomanceOptions = [
   { title: "Volume" },
@@ -18,6 +20,16 @@ export default function Statistics() {
 
   //QUERIES
   const { data: UserStats, isLoading, isError } = useGetUserStatsQuery();
+
+  //Progressive tour. The AI insight buttons live inside the Muscle tab, so the
+  //tour opens that tab for the user instead of asking them to find it.
+  const tour = useTour();
+
+  useEffect(() => {
+    if (tour.stage === "AI_INSIGHT_INTRO") {
+      setIsActive("Muscle");
+    }
+  }, [tour.stage]);
 
   // console.log("user stats:", UserStats?.exerciseBreakedown);
   return (
@@ -56,10 +68,11 @@ export default function Statistics() {
           />
         )}
 
-        {/* muscle screen */}
+        {/* muscle screen - now receives full UserStats for session count validation */}
         {isActive === "Muscle" && (
           <MuscleScreen
             muscleStats={UserStats?.exerciseBreakedown}
+            userStats={UserStats}
             isLoading={isLoading}
             isError={isError}
           />
@@ -68,6 +81,19 @@ export default function Statistics() {
         {/* PRs screen */}
         {isActive === "PRs" && <PrScreen />}
       </View>
+
+      {/* STAGE 4 - progress orientation. */}
+      {tour.stage === "PROGRESS_INTRO" ? (
+        <TourCallout
+          stepLabel="Step 4 of 5"
+          title="Your progress starts here."
+          description="Every workout contributes to your training history. This is where you can track your performance, strength improvements and personal records."
+          primaryLabel="Got it"
+          onPrimary={() => tour.complete("PROGRESS_INTRO")}
+          secondaryLabel="Skip"
+          onSecondary={() => tour.skip("PROGRESS_INTRO")}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

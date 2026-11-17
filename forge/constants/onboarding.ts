@@ -57,15 +57,40 @@ export const answers: Partial<OnboardingValues> = {};
 
 const isMobile = Platform.OS !== "web";
 
+// Serializes AsyncStorage writes so a queued answer can never land after a
+// pending clear, and so callers can await a known point in the queue.
+let writeQueue: Promise<void> = Promise.resolve();
+
+const enqueueWrite = (write: () => Promise<void>) => {
+  writeQueue = writeQueue.then(write).catch(() => {});
+  return writeQueue;
+};
+
+const replaceAnswers = (next: Partial<OnboardingValues>) => {
+  Object.keys(answers).forEach((key) => {
+    delete answers[key as keyof OnboardingValues];
+  });
+
+  Object.assign(answers, next);
+};
+
 export const hydrateOnboardingAnswers = async () => {
   if (!isMobile) {
     return;
   }
 
+  // Flush anything already queued so we never replace newer in-memory answers
+  // with a stale stored copy.
+  await writeQueue;
+
   try {
     const data = await AsyncStorage.getItem(ONBOARDING_KEYS);
+
+    // Replace (never merge) so removed keys cannot be resurrected. With no
+    // stored payload the in-memory answers are already the source of truth -
+    // resetOnboardingAnswers() is what clears them.
     if (data) {
-      Object.assign(answers, JSON.parse(data));
+      replaceAnswers(JSON.parse(data));
     }
   } catch {
     // Ignore storage errors and let the user continue from the first step.
@@ -87,20 +112,24 @@ export const saveOnboardingAnswers = (
   (answers as Record<string, unknown>)[field] = value;
 
   if (isMobile) {
-    AsyncStorage.setItem(ONBOARDING_KEYS, JSON.stringify(answers)).catch(
-      () => {}
+    return enqueueWrite(() =>
+      AsyncStorage.setItem(ONBOARDING_KEYS, JSON.stringify(answers))
     );
   }
+
+  return writeQueue;
 };
 
 export const clearOnboardingAnswer = (field: keyof OnboardingValues) => {
   delete answers[field];
 
   if (isMobile) {
-    AsyncStorage.setItem(ONBOARDING_KEYS, JSON.stringify(answers)).catch(
-      () => {}
+    return enqueueWrite(() =>
+      AsyncStorage.setItem(ONBOARDING_KEYS, JSON.stringify(answers))
     );
   }
+
+  return writeQueue;
 };
 
 export const getOnboardingAnswers = () => {
@@ -109,8 +138,12 @@ export const getOnboardingAnswers = () => {
 
 export const setOnboardingProgress = (stepKey: string) => {
   if (isMobile) {
-    AsyncStorage.setItem(ONBOARDING_PROGRESS_KEY, stepKey).catch(() => {});
+    return enqueueWrite(() =>
+      AsyncStorage.setItem(ONBOARDING_PROGRESS_KEY, stepKey)
+    );
   }
+
+  return writeQueue;
 };
 
 export const getOnboardingProgress = async (): Promise<string | null> => {
@@ -119,21 +152,55 @@ export const getOnboardingProgress = async (): Promise<string | null> => {
   }
 
   try {
+    await writeQueue;
     return await AsyncStorage.getItem(ONBOARDING_PROGRESS_KEY);
   } catch {
     return null;
   }
 };
 
+export const clearOnboardingProgress = () => {
+  if (isMobile) {
+    return enqueueWrite(() => AsyncStorage.removeItem(ONBOARDING_PROGRESS_KEY));
+  }
+
+  return writeQueue;
+};
+
 export const resetOnboardingAnswers = () => {
-  Object.keys(answers).forEach((key) => {
-    delete answers[key as keyof OnboardingValues];
-  });
+  replaceAnswers({});
 
   if (isMobile) {
-    AsyncStorage.removeItem(ONBOARDING_KEYS).catch(() => {});
-    AsyncStorage.removeItem(ONBOARDING_PROGRESS_KEY).catch(() => {});
+    return enqueueWrite(async () => {
+      await AsyncStorage.removeItem(ONBOARDING_KEYS);
+      await AsyncStorage.removeItem(ONBOARDING_PROGRESS_KEY);
+    });
   }
+
+  return writeQueue;
 };
 
 export const stepIndex = (key: string) => steps.findIndex((s) => s.key === key);
+
+// Resolves once every queued answer/progress write has reached AsyncStorage.
+export const flushOnboardingWrites = () => writeQueue;
+
+// First required step (in step order) whose answer is missing or fails its own
+// schema, or null when every required answer is valid. Used to resume at the
+// right place instead of trusting a stale progress key.
+export const firstIncompleteRequiredStep = (
+  values: Partial<OnboardingValues>
+): OnboardingStep | null =>
+  steps.find((step) => {
+    if (!step.required || !step.field) {
+      return false;
+    }
+
+    const value = values[step.field];
+
+    if (value == null) {
+      return true;
+    }
+
+    return !onboardingValuesSchema.shape[step.field].safeParse(value).success;
+  }) ?? null;

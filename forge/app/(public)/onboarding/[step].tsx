@@ -16,6 +16,8 @@ import WeeklyTargetStep from "@/components/onboarding/weekly-target";
 import SafeAreaScreen from "@/components/ui/safe-area-screen";
 import {
   clearOnboardingAnswer,
+  firstIncompleteRequiredStep,
+  flushOnboardingWrites,
   hydrateOnboardingAnswers,
   loadOnboardingAnswers,
   saveOnboardingAnswers,
@@ -92,7 +94,10 @@ export default function OnboardingStep() {
     });
   }, []);
 
-  const goNext = useCallback(() => {
+  const goNext = useCallback(async () => {
+    // Make sure the last answer is on disk before leaving the step.
+    await flushOnboardingWrites();
+
     if (next) {
       router.push({
         pathname: "/onboarding/[step]",
@@ -154,7 +159,18 @@ export default function OnboardingStep() {
     });
   }, [router]);
 
+  const firstIncomplete = useMemo(
+    () => firstIncompleteRequiredStep(values),
+    [values]
+  );
+
   const canContinue = useMemo(() => {
+    // planReveal must not be saveable without the answers it claims to
+    // summarise, otherwise it renders "valid" with empty values.
+    if (step?.kind === "reveal") {
+      return firstIncomplete === null;
+    }
+
     if (!step?.required || !step.field) {
       return true;
     }
@@ -166,7 +182,23 @@ export default function OnboardingStep() {
     }
 
     return fieldValue != null;
-  }, [step, values]);
+  }, [firstIncomplete, step, values]);
+
+  // Never render a step that sits past the first unanswered required one.
+  useEffect(() => {
+    if (!hydrated || !step || !firstIncomplete) {
+      return;
+    }
+
+    const incompleteIndex = stepIndex(firstIncomplete.key);
+
+    if (incompleteIndex >= 0 && index > incompleteIndex) {
+      router.replace({
+        pathname: "/onboarding/[step]",
+        params: { step: firstIncomplete.key },
+      });
+    }
+  }, [firstIncomplete, hydrated, index, router, step]);
 
   if (!step) {
     return null;

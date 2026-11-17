@@ -1,6 +1,8 @@
+import TourCallout from "@/components/tour/TourCallout";
 import {
   getOnboardingAnswers,
   hydrateOnboardingAnswers,
+  resetOnboardingAnswers,
 } from "@/constants/onboarding";
 import {
   useGetAllWorkoutsQuery,
@@ -9,6 +11,7 @@ import {
   useGetScheduledWorkoutsQuery,
   useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 import { authClient } from "@/lib/auth-client";
 import { completeOnboardingAfterAuth } from "@/lib/onboarding-completion";
 import { formatTrainedTime } from "@/utils/formatDuration";
@@ -350,15 +353,20 @@ export default function HomeScreen() {
     };
   }, [profile, profileError, profileLoading, router]);
 
+  // Progressive tour. Home only renders the stage that is currently active.
+  const tour = useTour();
+
   //FUNCTIONS
   // logout function.
   const handleLogOut = async () => {
     try {
       await authClient.signOut();
-
-      router.replace("/sign-in");
     } catch (error) {
       console.error("Logout failed", error);
+    } finally {
+      await resetOnboardingAnswers();
+      tour.reset();
+      router.replace("/sign-in");
     }
   };
 
@@ -705,6 +713,52 @@ export default function HomeScreen() {
 
         {/*paste here */}
       </ScrollView>
+
+      {/* STAGE 1 - welcome. "Let's Start" enters the real workout flow: it opens
+          the scheduled workout when there is one, otherwise the Workouts tab
+          where the Start Workout button lives. */}
+      {tour.stage === "HOME_INTRO" ? (
+        <TourCallout
+          stepLabel="Step 1 of 5"
+          title="Welcome to Forge."
+          description="Your training journey starts here. Let's get your first workout underway. Tap Start Workout to begin your first training session - you'll be able to track your exercises, sets, reps and rest periods."
+          primaryLabel="Let's Start"
+          onPrimary={() => {
+            tour.complete("HOME_INTRO");
+
+            if (nextScheduledWorkout) {
+              router.push({
+                pathname: "/workout/[id]",
+                params: { id: nextScheduledWorkout.id },
+              });
+            } else {
+              router.push("/(app)/(tabs)/workouts");
+            }
+          }}
+          secondaryLabel="Skip for now"
+          onSecondary={() => tour.skip("HOME_INTRO")}
+        />
+      ) : null}
+
+      {/* STAGE 3 - fallback. completeSession.tsx shows this first, but if the
+          user navigates away it still appears here rather than blocking the
+          journey. The guard proves the session was persisted. */}
+      {tour.stage === "WORKOUT_SAVED" &&
+      completedSessions &&
+      completedSessions.length > 0 ? (
+        <TourCallout
+          stepLabel="Step 3 of 5"
+          title="First workout complete!"
+          description="Great work! You've officially started your Forge journey. Your training data is now ready to explore."
+          primaryLabel="Explore My Progress"
+          onPrimary={() => {
+            tour.complete("WORKOUT_SAVED");
+            router.push("/(app)/(tabs)/progress");
+          }}
+          secondaryLabel="Maybe Later"
+          onSecondary={() => tour.skip("WORKOUT_SAVED")}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

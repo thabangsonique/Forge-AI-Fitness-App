@@ -1,6 +1,8 @@
 import {
+  firstIncompleteRequiredStep,
   getOnboardingAnswers,
   hydrateOnboardingAnswers,
+  loadOnboardingAnswers,
 } from "@/constants/onboarding";
 import { authClient } from "@/lib/auth-client";
 import { completeOnboardingAfterAuth } from "@/lib/onboarding-completion";
@@ -58,10 +60,23 @@ export default function SignUp() {
     const result = getOnboardingAnswers();
 
     if (!result.success) {
+      const firstIncomplete = firstIncompleteRequiredStep(
+        loadOnboardingAnswers()
+      );
+
       Alert.alert(
         "Answers missing",
         "Please finish your plan before creating an account.",
-        [{ text: "OK", onPress: () => router.replace("/intro") }]
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              router.replace({
+                pathname: "/onboarding/[step]",
+                params: { step: firstIncomplete?.key ?? "goal" },
+              }),
+          },
+        ]
       );
       return;
     }
@@ -107,10 +122,23 @@ export default function SignUp() {
     const result = getOnboardingAnswers();
 
     if (!result.success) {
+      const firstIncomplete = firstIncompleteRequiredStep(
+        loadOnboardingAnswers()
+      );
+
       Alert.alert(
         "Answers missing",
         "Please finish your plan before creating an account.",
-        [{ text: "OK", onPress: () => router.replace("/intro") }]
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              router.replace({
+                pathname: "/onboarding/[step]",
+                params: { step: firstIncomplete?.key ?? "goal" },
+              }),
+          },
+        ]
       );
       return;
     }

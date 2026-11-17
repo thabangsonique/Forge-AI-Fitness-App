@@ -2,7 +2,11 @@ import IntroSlide from "@/components/onboarding/intro-slide";
 import SafeAreaScreen from "@/components/ui/safe-area-screen";
 import { INTRO_SLIDES } from "@/constants/intro-slides";
 import {
+  clearOnboardingProgress,
+  firstIncompleteRequiredStep,
   getOnboardingProgress,
+  hydrateOnboardingAnswers,
+  loadOnboardingAnswers,
   stepIndex,
 } from "@/constants/onboarding";
 import { useRouter } from "expo-router";
@@ -31,6 +35,24 @@ export default function Intro() {
   };
 
   const handleStart = async () => {
+    await hydrateOnboardingAnswers();
+
+    // A saved progress key can outlive the answers it belonged to (for example
+    // when the user abandoned the flow). Never resume past an unanswered
+    // required step, otherwise planReveal looks valid with empty answers and
+    // sign-up bounces the user back here forever.
+    const firstIncomplete = firstIncompleteRequiredStep(loadOnboardingAnswers());
+
+    if (firstIncomplete) {
+      await clearOnboardingProgress();
+
+      router.replace({
+        pathname: "/onboarding/[step]",
+        params: { step: firstIncomplete.key },
+      });
+      return;
+    }
+
     const savedStep = await getOnboardingProgress();
     const savedIndex = savedStep ? stepIndex(savedStep) : -1;
     const resumeStep = savedStep && savedIndex >= 0 ? savedStep : "goal";

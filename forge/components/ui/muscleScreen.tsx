@@ -1,3 +1,4 @@
+import TourCallout from "@/components/tour/TourCallout";
 import {
   defaultZoom,
   MuscleId,
@@ -8,12 +9,14 @@ import {
   useGenerateCoachInsightMutation,
   useGetCoachInsightsQuery,
 } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
   Text,
@@ -47,6 +50,14 @@ const muscleGroups = [
 
 interface MuscleScreenProps {
   muscleStats?: ExerciseBreakedown;
+  userStats?: {
+    overview: {
+      completedSession: {
+        totalSessions: number;
+        totalDurationSeconds: number;
+      };
+    };
+  };
 
   isLoading: boolean;
   isError: boolean;
@@ -90,6 +101,7 @@ export default function MuscleScreen({
   muscleStats,
   isLoading,
   isError,
+  userStats,
 }: MuscleScreenProps) {
   const [isActive, setIsActive] = useState<MuscleId>("chest");
   const [activeInsightSection, setActiveInsightSection] =
@@ -110,6 +122,18 @@ export default function MuscleScreen({
   const { data: cachedInsight } = useGetCoachInsightsQuery();
 
   const insight = cachedInsight;
+
+  // Progressive tour. The stage completes only when an insight really exists -
+  // so quota errors or a failed request leave the tour where it is.
+  const tour = useTour();
+  const tourStage = tour.stage;
+  const completeTourStage = tour.complete;
+
+  useEffect(() => {
+    if (tourStage === "AI_INSIGHT_INTRO" && insight?.generatedAt) {
+      completeTourStage("AI_INSIGHT_INTRO");
+    }
+  }, [completeTourStage, insight?.generatedAt, tourStage]);
 
   const activeMuscle = muscleImages[isActive];
 
@@ -184,7 +208,7 @@ export default function MuscleScreen({
     );
   }
 
-  //error helper function.
+  // error helper function.
   const getErrorMessage = (error: unknown): string => {
     const e = error as { status?: number | string; data?: { error?: string } };
 
@@ -194,8 +218,23 @@ export default function MuscleScreen({
     return "Something went wrong. Please try again.";
   };
 
+  // Get session count to validate we have enough data for AI insights.
+  const sessionCount =
+    userStats?.overview?.completedSession?.totalSessions ?? 0;
+  const MIN_SESSIONS_FOR_INSIGHT = 2;
+
   // handle insight generation
   const handleInsightGeneration = async (section: InsightSection) => {
+    // UI-based check: ensure we have enough sessions before generating.
+    if (sessionCount < MIN_SESSIONS_FOR_INSIGHT) {
+      Alert.alert(
+        "Not enough training data",
+        `Forge needs at least ${MIN_SESSIONS_FOR_INSIGHT} completed workouts to generate personalized insights. Complete one more workout and come back to get smarter recommendations.`,
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     if (isGenerating) return;
 
     setActiveInsightSection(section);
@@ -703,6 +742,23 @@ export default function MuscleScreen({
           <Text className="text-white">AI Insight</Text>
         </View>
       </ScrollView>
+
+      {/* STAGE 5 - first AI insight. Reuses the mutation, loading state and
+          error handling above; the stage advances from `insight` becoming
+          available, not from the button being pressed. The UI check ensures
+          users have at least 2 sessions before generation can succeed. */}
+      {tour.stage === "AI_INSIGHT_INTRO" && !insight ? (
+        <TourCallout
+          stepLabel="Step 5 of 5"
+          title="Ready for smarter training?"
+          description={`Forge can analyse your training performance and provide personalised coaching insights. You'll need at least 2 completed workouts to generate your first insight.`}
+          primaryLabel="Generate My First Insight"
+          loading={isGenerating}
+          onPrimary={() => handleInsightGeneration("muscle")}
+          secondaryLabel="Maybe Later"
+          onSecondary={() => tour.skip("AI_INSIGHT_INTRO")}
+        />
+      ) : null}
     </View>
   );
 }

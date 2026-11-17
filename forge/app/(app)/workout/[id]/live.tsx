@@ -1,8 +1,10 @@
 import AlertModal from "@/components/ui/modals/alertModal";
+import TourCallout from "@/components/tour/TourCallout";
 import {
   useCreateWorkoutSessionMutation,
   useGetAllWorkoutsQuery,
 } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 import { formatElapsedTime } from "@/utils/formatDuration";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -50,7 +52,7 @@ type WorkoutSets = {
   };
 };
 
-export default function live() {
+export default function LiveWorkout() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -330,8 +332,11 @@ export default function live() {
   };
 
   // console.log("ALL SETS", workout?.exercises);
-  // ape: console.log(JSON.stringify(workout?.exercises?.[0], null, 2));
+  // console.log(JSON.stringify(workout?.exercises?.[0], null, 2));
   // console.log("exersice image,:", currentExercise?.image);
+
+  // Progressive tour: one brief introduction, never repeated mid-set.
+  const tour = useTour();
   return (
     <SafeAreaView className="flex-1 bg-background pb-5 pt-5">
       <KeyboardAwareScrollView
@@ -681,6 +686,21 @@ export default function live() {
           setModalAction={setModalAction}
         />
       )}
+
+      {/* STAGE 2 - live workout. A single card so the user is not interrupted
+          while actually training. The rest timer explains itself when it
+          appears. */}
+      {tour.stage === "LIVE_WORKOUT" ? (
+        <TourCallout
+          stepLabel="Step 2 of 5"
+          title="Track your training"
+          description="Here's where you record your exercises. Enter the weight and reps for each set, then tap the check button to log it and start your rest timer. When you're finished, tap Finish Workout to save your session."
+          primaryLabel="Got it"
+          onPrimary={() => tour.complete("LIVE_WORKOUT")}
+          secondaryLabel="Skip"
+          onSecondary={() => tour.skip("LIVE_WORKOUT")}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

@@ -1,10 +1,12 @@
 import globalReducer from "@/features/globalSlice";
+import tourReducer from "@/features/tour/tourSlice";
 import { configureStore } from "@reduxjs/toolkit";
 import { api } from "../features/api";
 
 export const store = configureStore({
   reducer: {
     global: globalReducer,
+    tour: tourReducer,
     [api.reducerPath]: api.reducer,
   },
 

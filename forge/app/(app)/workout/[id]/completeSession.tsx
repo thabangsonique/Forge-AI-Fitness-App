@@ -1,7 +1,9 @@
+import TourCallout from "@/components/tour/TourCallout";
 import {
   useGetAllWorkoutsQuery,
   useGetWorkoutSessionHistoryQuery,
 } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 import { formatDate, formatDuration } from "@/utils/formatDuration";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -66,6 +68,12 @@ export default function CompleteSession() {
   const totalVolume = completedSets.reduce((total, set) => {
     return total + set.weight * set.reps;
   }, 0);
+
+  // Progressive tour. Reaching this screen already proves the session was
+  // persisted - live.tsx only navigates here after createWorkoutSession()
+  // resolves. We additionally require the session to appear in history before
+  // celebrating, so a stale cache cannot trigger the congrats card.
+  const tour = useTour();
 
   return (
     <ImageBackground source={bgImg} className="flex-1" resizeMode="cover">
@@ -264,6 +272,23 @@ export default function CompleteSession() {
           </Pressable>
         </View>
       </SafeAreaView>
+
+      {/* STAGE 3 - congratulations. Gated on a session that actually exists in
+          history, never on the Finish button being pressed. */}
+      {tour.stage === "WORKOUT_SAVED" && completedSession ? (
+        <TourCallout
+          stepLabel="Step 3 of 5"
+          title="First workout complete!"
+          description="Great work! You've officially started your Forge journey. Your training data is now ready to explore."
+          primaryLabel="Explore My Progress"
+          onPrimary={() => {
+            tour.complete("WORKOUT_SAVED");
+            router.replace("/(app)/(tabs)/progress");
+          }}
+          secondaryLabel="Maybe Later"
+          onSecondary={() => tour.skip("WORKOUT_SAVED")}
+        />
+      ) : null}
     </ImageBackground>
   );
 }

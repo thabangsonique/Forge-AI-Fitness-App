@@ -27,6 +27,10 @@ import {
   AiCoachInsightResponse,
   CoachInsightFailureCode,
   GenerateCoachInsightResult,
+  MuscleFocusInsight,
+  OverallCoachSummary,
+  StrengthInsight,
+  VolumeInsight,
 } from "./types";
 
 const GEMINI_MAX_ATTEMPTS = 3;
@@ -185,6 +189,90 @@ async function withRetry<T>(
   throw new Error("Gemini retry process failed.");
 }
 
+// Gemini can legitimately return no text at all - for example when a MAX_TOKENS
+// cut lands inside the thinking budget, which `maxOutputTokens` (default 1500)
+// shares with the JSON body. Persisting that as "{}" would return success with
+// every section undefined and still finalize the reservation, so the payload is
+// validated here, before `completeAiExecution` runs.
+const COACH_REQUIRED_FIELDS: Record<
+  string,
+  Record<string, "string" | "array">
+> = {
+  muscleFocus: {
+    title: "string",
+    explanation: "string",
+    neglectedMuscles: "array",
+    recommendations: "array",
+  },
+  volume: {
+    title: "string",
+    explanation: "string",
+    trendStatus: "string",
+    recommendations: "array",
+  },
+  strength: {
+    title: "string",
+    praise: "string",
+    progressionAnalysis: "string",
+    exercisesToFocus: "array",
+  },
+  overall: {
+    headline: "string",
+    detailedFeedback: "string",
+    nextMilestone: "string",
+    goalAlignment: "string",
+  },
+};
+
+const hasFieldValue = (value: unknown, kind: "string" | "array") =>
+  kind === "array"
+    ? Array.isArray(value)
+    : typeof value === "string" && value.trim().length > 0;
+
+const parseCoachInsight = (rawText: string): AiCoachInsightResponse => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error("Gemini returned a malformed coaching response.");
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error("Gemini returned an empty coaching response.");
+  }
+
+  const record = parsed as Record<string, unknown>;
+
+  for (const [section, fields] of Object.entries(COACH_REQUIRED_FIELDS)) {
+    const sectionValue = record[section];
+
+    if (typeof sectionValue !== "object" || sectionValue === null) {
+      throw new Error(
+        `Gemini returned an incomplete coaching response (missing ${section}).`
+      );
+    }
+
+    const sectionRecord = sectionValue as Record<string, unknown>;
+
+    for (const [field, kind] of Object.entries(fields)) {
+      if (!hasFieldValue(sectionRecord[field], kind)) {
+        throw new Error(
+          `Gemini returned an incomplete coaching response (missing ${section}.${field}).`
+        );
+      }
+    }
+  }
+
+  return {
+    muscleFocus: record.muscleFocus as MuscleFocusInsight,
+    volume: record.volume as VolumeInsight,
+    strength: record.strength as StrengthInsight,
+    overall: record.overall as OverallCoachSummary,
+    generatedAt: new Date().toISOString(),
+  };
+};
+
 export const generateUserCoachInsight = async (
   userId: string
 ): Promise<GenerateCoachInsightResult> => {
@@ -330,17 +418,20 @@ export const generateUserCoachInsight = async (
       throw lastError ?? new Error("Gemini did not return a response.");
     }
 
-    const rawText = response.text || "{}";
-    const parsedText = JSON.parse(rawText); //convert response to json format
+    const rawText = response.text;
+
+    // Throwing here routes through the existing catch below, which releases the
+    // reservation instead of consuming the allowance for an unusable result.
+    if (!rawText || rawText.trim().length === 0) {
+      throw new Error(
+        `Gemini returned no coaching content (finishReason: ${
+          response.candidates?.[0]?.finishReason ?? "unknown"
+        }).`
+      );
+    }
 
     //data that we'll use and send to the front end.
-    const coachingResponse: AiCoachInsightResponse = {
-      muscleFocus: parsedText.muscleFocus,
-      volume: parsedText.volume,
-      strength: parsedText.strength,
-      overall: parsedText.overall,
-      generatedAt: new Date().toISOString(),
-    };
+    const coachingResponse = parseCoachInsight(rawText);
 
     //Metadata info about Gemini's generation token usage.
     const usage = response.usageMetadata;

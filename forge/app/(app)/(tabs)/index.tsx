@@ -329,6 +329,10 @@ export default function HomeScreen() {
       return;
     }
 
+    if (!profile) {
+      return;
+    }
+
     let isActive = true;
 
     const checkOnboarding = async () => {
@@ -338,10 +342,7 @@ export default function HomeScreen() {
         return;
       }
 
-      if (
-        !profile?.onboardingCompletedAt &&
-        !getOnboardingAnswers().success
-      ) {
+      if (!profile?.onboardingCompletedAt && !getOnboardingAnswers().success) {
         router.replace("/intro");
       }
     };
@@ -351,7 +352,7 @@ export default function HomeScreen() {
     return () => {
       isActive = false;
     };
-  }, [profile, profileError, profileLoading, router]);
+  }, [profile, profileError, router]);
 
   // Progressive tour. Home only renders the stage that is currently active.
   const tour = useTour();

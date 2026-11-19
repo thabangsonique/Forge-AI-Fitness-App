@@ -13,6 +13,7 @@ import { useTour } from "@/features/tour/useTour";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -119,13 +120,15 @@ export default function MuscleScreen({
 
   // The GET endpoint only returns an insight that matches the user's current
   // training data, so whatever it returns is safe to render on the cards.
-  const { data: cachedInsight } = useGetCoachInsightsQuery();
+  const { data: cachedInsight, refetch: refetchCoachInsight } =
+    useGetCoachInsightsQuery();
 
   const insight = cachedInsight;
 
   // Progressive tour. The stage completes only when an insight really exists -
   // so quota errors or a failed request leave the tour where it is.
   const tour = useTour();
+  const router = useRouter();
   const tourStage = tour.stage;
   const completeTourStage = tour.complete;
 
@@ -142,6 +145,11 @@ export default function MuscleScreen({
   const scale = useRef(new Animated.Value(1)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
+
+  //TEMPORARY.
+  useEffect(() => {
+    console.log("[AI UI] here GET insight updated::", insight);
+  }, [insight]);
 
   useEffect(() => {
     scale.stopAnimation();
@@ -225,6 +233,7 @@ export default function MuscleScreen({
 
   // handle insight generation
   const handleInsightGeneration = async (section: InsightSection) => {
+    console.log("🔥 NEW MUSCLE SCREEN HANDLER EXECUTED", section);
     // UI-based check: ensure we have enough sessions before generating.
     if (sessionCount < MIN_SESSIONS_FOR_INSIGHT) {
       Alert.alert(
@@ -257,7 +266,16 @@ export default function MuscleScreen({
     }, 45_000);
 
     try {
-      await generateInsight().unwrap();
+      const generatedInsight = await generateInsight().unwrap();
+
+      console.log("[AI UI] POST generated insight:", generatedInsight);
+
+      const refetchResult = await refetchCoachInsight();
+
+      console.log("[AI UI] GET refetch result:", refetchResult);
+      console.log("[AI UI] GET refetch data:", refetchResult.data);
+      console.log("[AI UI] GET refetch error:", refetchResult.error);
+      console.log("[AI UI] GET refetch status:", refetchResult.status);
     } catch (error: any) {
       setGenerationError(getErrorMessage(error));
       console.log("Insight generation failed", error);
@@ -377,7 +395,7 @@ export default function MuscleScreen({
         </View>
 
         {/* GENERATE MUSCLE INSIGHT CARD */}
-        {activeInsightSection === "muscle" && insight?.muscleFocus ? (
+        {insight?.muscleFocus ? (
           <View className="mt-4 gap-2 rounded-2xl border border-primary/10 bg-background/60 p-3">
             {/* Title + trend badge */}
             <View className="flex-row items-start justify-between gap-2">
@@ -385,14 +403,14 @@ export default function MuscleScreen({
                 {insight.muscleFocus.title}
               </Text>
               <View className="rounded-full bg-primary/10 px-2.5 py-1">
-                <Text className="text-xs font-bold text-primary">
+                <Text className="text-md font-bold text-primary">
                   {insight.muscleFocus.neglectedMuscles}
                 </Text>
               </View>
             </View>
 
             {/* Explanation */}
-            <Text className="text-sm leading-5 text-muted-2">
+            <Text className="text-md leading-5 text-muted-2">
               {insight.muscleFocus.explanation}
             </Text>
 
@@ -400,7 +418,7 @@ export default function MuscleScreen({
             {insight.muscleFocus.recommendations.map((tip, index) => (
               <View key={index} className="flex-row items-start gap-2">
                 <View className="mt-2 h-1.5 w-1.5 rounded-full bg-primary" />
-                <Text className="flex-1 text-sm leading-5 text-muted-2">
+                <Text className="text-md flex-1 leading-5 text-muted-2">
                   {tip}
                 </Text>
               </View>
@@ -408,7 +426,15 @@ export default function MuscleScreen({
 
             {/* generate workout button */}
             <Pressable
-              onPress={() => handleInsightGeneration("volume")}
+              onPress={() => {
+                // If insight already generated, navigate to workout screen
+                if (insight?.generatedAt) {
+                  router.push("/(app)/ai-coach/AI-workout-gen");
+                } else {
+                  // Otherwise, generate the insight
+                  handleInsightGeneration("volume");
+                }
+              }}
               disabled={isGenerating}
               className={`mt-4 flex-row items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 ${
                 isGenerating ? "opacity-60" : ""
@@ -421,7 +447,9 @@ export default function MuscleScreen({
                 <>
                   <Ionicons name="sparkles" size={17} color="#000" />
                   <Text className="font-bold text-black">
-                    Build My Fix Workout
+                    {insight?.generatedAt
+                      ? "Build My Fix Workout"
+                      : "Build Workout"}
                   </Text>
                 </>
               )}
@@ -523,22 +551,22 @@ export default function MuscleScreen({
         </View>
 
         {/* GENERATED VOLUME  HERE */}
-        {activeInsightSection === "volume" && insight?.volume ? (
+        {insight?.volume ? (
           <View className="mt-4 gap-2 rounded-2xl border border-primary/10 bg-background/60 p-3">
             {/* Title + trend badge */}
             <View className="flex-row items-start justify-between gap-2">
-              <Text className="flex-1 text-sm font-bold text-white">
+              <Text className="text-md flex-1 font-bold text-white">
                 {insight.volume.title}
               </Text>
               <View className="rounded-full bg-primary/10 px-2.5 py-1">
-                <Text className="text-xs font-bold text-primary">
+                <Text className="text-md font-bold text-primary">
                   {insight.volume.trendStatus.replace("_", " ")}
                 </Text>
               </View>
             </View>
 
             {/* Explanation */}
-            <Text className="text-sm leading-5 text-muted-2">
+            <Text className="text-md leading-5 text-muted-2">
               {insight.volume.explanation}
             </Text>
 
@@ -546,7 +574,7 @@ export default function MuscleScreen({
             {insight.volume.recommendations.map((tip, index) => (
               <View key={index} className="flex-row items-start gap-2">
                 <View className="mt-2 h-1.5 w-1.5 rounded-full bg-primary" />
-                <Text className="flex-1 text-sm leading-5 text-muted-2">
+                <Text className="text-md flex-1 leading-5 text-muted-2">
                   {tip}
                 </Text>
               </View>
@@ -554,7 +582,15 @@ export default function MuscleScreen({
 
             {/* generate workout button */}
             <Pressable
-              onPress={() => handleInsightGeneration("volume")}
+              onPress={() => {
+                // If insight already generated, navigate to workout screen
+                if (insight?.generatedAt) {
+                  router.push("/(app)/ai-coach/AI-workout-gen");
+                } else {
+                  // Otherwise, generate the insight
+                  handleInsightGeneration("volume");
+                }
+              }}
               disabled={isGenerating}
               className={`mt-4 flex-row items-center justify-center gap-2 rounded-full bg-primary px-4 py-3 ${
                 isGenerating ? "opacity-60" : ""
@@ -567,7 +603,9 @@ export default function MuscleScreen({
                 <>
                   <Ionicons name="sparkles" size={17} color="#000" />
                   <Text className="font-bold text-black">
-                    Build My Fix Workout
+                    {insight?.generatedAt
+                      ? "Build My Fix Workout"
+                      : "Build Workout"}
                   </Text>
                 </>
               )}
@@ -643,22 +681,22 @@ export default function MuscleScreen({
 
         {/* MUSCLE STRENGTH INSIGHT */}
 
-        {activeInsightSection === "strength" && insight?.strength ? (
+        {insight?.strength ? (
           <View className="mt-4 gap-2 rounded-2xl border border-primary/10 bg-background/60 p-3">
             {/* Title + trend badge */}
             <View className="flex-row items-start justify-between gap-2">
-              <Text className="flex-1 text-sm font-bold text-white">
+              <Text className="text-md flex-1 font-bold text-white">
                 {insight.strength.title}
               </Text>
               <View className="rounded-full bg-primary/10 px-2.5 py-1">
-                <Text className="text-xs font-bold text-primary">
+                <Text className="text-md font-bold text-primary">
                   {insight.strength.praise.replace("_", " ")}
                 </Text>
               </View>
             </View>
 
             {/* Explanation */}
-            <Text className="text-sm leading-5 text-muted-2">
+            <Text className="text-md leading-5 text-muted-2">
               {insight.strength.progressionAnalysis}
             </Text>
 

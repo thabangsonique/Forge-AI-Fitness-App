@@ -13,6 +13,7 @@ export interface GenerateWorkoutRequest {
   fitnessGoal?: string;
   experienceLevel?: string;
   preferredEquipment?: string[];
+  durationMinutes?: number;
 }
 
 //Accommodate the exercise required for this workout generation - handed to gemini.
@@ -56,7 +57,7 @@ export type GenerateWorkoutResult =
   | {
       success: true;
       data: AiWorkoutDraftResponse;
-      source: "gemini";
+      source: "cache" | "gemini" | "openrouter";
     }
   | {
       success: false;

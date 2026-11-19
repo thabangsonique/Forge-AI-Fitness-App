@@ -1,5 +1,5 @@
 // Backend/src/services/fitnessAnalytics/personalRecordsService.ts
-import { asc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { exercises, workoutSession, workoutSessionSets } from "../../db/schema";
 import type {
@@ -9,6 +9,8 @@ import type {
   PRMoment,
 } from "../../types/personalRecords";
 import { estimateOneRepMax } from "./strengthProgressionService";
+
+const MAX_SET_ROWS = 20_000;
 
 export const isBodyweightExercise = (equipment: string | null): boolean => {
   return equipment?.toLowerCase() === "bodyweight";
@@ -104,9 +106,10 @@ export async function getAllSetsForUser(
     )
     .innerJoin(exercises, eq(workoutSessionSets.exerciseId, exercises.id))
     .where(eq(workoutSession.userId, userId))
-    .orderBy(asc(workoutSession.completedAt));
+    .orderBy(desc(workoutSession.completedAt))
+    .limit(MAX_SET_ROWS);
 
-  return rows;
+  return rows.reverse();
 }
 
 export async function calculatePersonalRecords(

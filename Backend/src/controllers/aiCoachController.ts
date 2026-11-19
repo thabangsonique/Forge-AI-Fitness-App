@@ -1,7 +1,9 @@
 import { fromNodeHeaders } from "better-auth/node";
 import { Request, Response } from "express";
 import { auth } from "../lib/auth";
+import { loadAiConfig } from "../services/aiUsage/aiUsageConfig";
 import { generateUserCoachInsight } from "../services/aiCoach/geminiCoachService";
+import { generateUserCoachInsightOpenrouter } from "../services/ai/openrouterCoachService";
 import { generateFingerPrint } from "../services/aiCoach/promptBuilder";
 import { getFitnessContext } from "../services/fitnessAnalytics/fitnessAnalyticsService";
 import { checkUserEntitlement } from "../services/aiUsage/subscriptionService";
@@ -18,9 +20,12 @@ export const generateCoachInsight = async (req: Request, res: Response) => {
     }
 
     const userId = session.user.id;
+    const config = loadAiConfig();
 
-    //call actual ai generation function.
-    const result = await generateUserCoachInsight(userId);
+    // Call the appropriate AI service based on provider configuration
+    const result = config.provider === "openrouter"
+      ? await generateUserCoachInsightOpenrouter(userId)
+      : await generateUserCoachInsight(userId);
 
     //if generation failed
     if (!result.success) {

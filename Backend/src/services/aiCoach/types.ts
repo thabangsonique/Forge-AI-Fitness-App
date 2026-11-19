@@ -47,7 +47,7 @@ export type CoachInsightFailureCode =
 export type GenerateCoachInsightResult =
   | {
       success: true;
-      source: "cache" | "gemini";
+      source: "cache" | "gemini" | "openrouter";
       data: AiCoachInsightResponse;
     }
   | {

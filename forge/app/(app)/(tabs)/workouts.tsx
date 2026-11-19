@@ -1,9 +1,11 @@
+import TourCallout from "@/components/tour/TourCallout";
 import {
   useGetAllWorkoutsQuery,
   useGetScheduledWorkoutsQuery,
   useGetWorkoutsBySearchQuery,
   Workout,
 } from "@/features/api";
+import { useTour } from "@/features/tour/useTour";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Feather, FontAwesome5 } from "@expo/vector-icons";
@@ -83,6 +85,7 @@ export default function Plan() {
   const [workoutSelected, setWorkoutSelected] = useState("");
   const router = useRouter();
 
+  const tour = useTour();
   // --------------------------------------------------
   // SEARCH DEBOUNCE
   // --------------------------------------------------
@@ -157,7 +160,7 @@ export default function Plan() {
     }
 
     // Otherwise display all workouts.
-    return allWorkouts ?? [];
+    return userWorkouts ?? [];
   }, [debouncedSearchTerm, allWorkouts, searchedWorkouts]);
 
   // --------------------------------------------------
@@ -242,6 +245,11 @@ export default function Plan() {
 
   const defaultWorkouts = allWorkouts?.filter((w) => {
     return w.workoutType === "system";
+  });
+
+  //users workouts
+  const userWorkouts = allWorkouts?.filter((w) => {
+    return w.workoutType === "user";
   });
 
   // console.log(
@@ -552,6 +560,25 @@ export default function Plan() {
           </View>
         }
       />
+
+      {/* //callout tour */}
+      {tour.stage === "HOME_INTRO" ? (
+        <TourCallout
+          stepLabel="Step 1 of 5"
+          title="Welcome to Forge."
+          description="Your training journey starts here. Let's get your first workout underway. Tap Start Workout to begin your first training session..."
+          primaryLabel="Let's Start"
+          onPrimary={() => {
+            tour.complete("HOME_INTRO");
+            // Add your logic to start the workout
+            if (nextWorkout) {
+              router.push(`/workout/${nextWorkout.id}`);
+            }
+          }}
+          secondaryLabel="Skip for now"
+          onSecondary={() => tour.skip("HOME_INTRO")}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

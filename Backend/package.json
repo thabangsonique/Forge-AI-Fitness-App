@@ -19,6 +19,8 @@
     "@better-auth/expo": "^1.7.3",
     "@google/genai": "^3.0.0",
     "@neondatabase/serverless": "^1.1.0",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "ai": "^7.0.176",
     "better-auth": "^1.7.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

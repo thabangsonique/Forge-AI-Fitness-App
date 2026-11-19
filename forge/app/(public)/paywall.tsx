@@ -42,7 +42,8 @@ export default function Paywall() {
         </View>
 
         <Text className="mt-4 text-3xl font-bold leading-9 text-white">
-          Keep the momentum.
+          Keep the momentum. Start completely{" "}
+          <Text className="text-primary">free.</Text>
         </Text>
         <Text className="mt-2 text-base leading-6 text-muted/50">
           Unlock unlimited coach insights and generated workouts.
@@ -91,7 +92,9 @@ export default function Paywall() {
                     <Text className="text-lg font-bold text-white">
                       {plan.price}
                     </Text>
-                    <Text className="text-xs text-muted/40">{plan.cadence}</Text>
+                    <Text className="text-xs text-muted/40">
+                      {plan.cadence}
+                    </Text>
                   </View>
                 </View>
                 <Text className="mt-2 text-xs text-muted/40">{plan.note}</Text>

@@ -344,6 +344,12 @@ export interface SaveWorkoutDraftResponse {
   workoutName: string;
 }
 
+export interface GenerateCoachInsightApiResponse {
+  success: true;
+  source: "cache" | "gemini" | "openrouter";
+  data: AiCoachInsightResponse;
+}
+
 export const api = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001",
@@ -653,11 +659,8 @@ export const api = createApi({
         method: "POST",
       }),
 
-      transformResponse: (response: {
-        success: true;
-        source: "cache" | "gemini";
-        data: AiCoachInsightResponse;
-      }) => response.data,
+      transformResponse: (response: GenerateCoachInsightApiResponse) =>
+        response.data,
 
       invalidatesTags: ["AiCoach"],
     }),

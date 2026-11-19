@@ -3,11 +3,15 @@ import { DEFAULT_FORGE_BUSINESS_LIMITS } from "./types";
 export const AI_THINKING_LEVELS = ["low", "medium", "high"] as const;
 export type AiThinkingLevel = (typeof AI_THINKING_LEVELS)[number];
 
+// AI Provider types
+export type AiProvider = "gemini" | "openrouter";
+
 export interface AiConfig {
   aiEnabled: boolean;
+  provider: AiProvider;
   apiKey: string;
 
-  //rules from google
+  //rules from google/openrouter
   maxRequestsPerMinute: number;
   maxRequestsPerDay: number;
   maxInputTokensPerMinute: number;
@@ -15,10 +19,9 @@ export interface AiConfig {
   model: string;
   // Fallback model used when the primary model is temporarily overloaded.
   fallbackModel: string;
-  // Hard per-request timeout so a stalled Gemini call can never hang forever.
+  // Hard per-request timeout so AI calls can never hang forever.
   requestTimeoutMs: number;
-  // Gemini 3 reasoning depth. Low keeps structured JSON generation fast;
-  // Gemini 3.8 Flash rejects MINIMAL, so low is the fastest supported level.
+  // AI 3 reasoning depth (for Gemini only).
   thinkingLevel: AiThinkingLevel;
   // Upper bound on generated text so a looping response cannot run forever.
   maxOutputTokens: number;
@@ -34,13 +37,11 @@ export interface AiConfig {
   validationErrors: string[];
 }
 
-//function to convert value to njumbetr
+//function to convert value to number
 const parseStrictPositiveInt = (
   value: string | undefined
 ): number | undefined => {
-  if (!value) {
-    return undefined;
-  }
+  if (!value) return undefined;
 
   const parsed = parseInt(value.trim(), 10);
   if (isNaN(parsed) || parsed <= 0) return undefined;
@@ -51,29 +52,48 @@ const parseStrictPositiveInt = (
 export const loadAiConfig = (): AiConfig => {
   const errors: string[] = [];
 
-  //check if the kill switch is on or off.
+  // Check if the kill switch is on or off.
   const isEnabled = process.env.AI_ENABLED?.trim() === "true";
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim() || "";
+  // Determine which provider to use (default to openrouter for free tier support)
+  const provider = process.env.AI_PROVIDER?.trim().toLowerCase() as AiProvider || "openrouter";
+
+  // API key comes from different env vars depending on provider
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim() || "";
+  const openrouterApiKey = process.env.OPENROUTER_API_KEY?.trim() || "";
+
+  // Select the appropriate API key based on provider
+  const apiKey = provider === "gemini" ? geminiApiKey : openrouterApiKey;
 
   if (isEnabled && !apiKey) {
-    errors.push("GEMINI_API_KEY is missing from environment variables.");
+    errors.push(
+      provider === "gemini"
+        ? "GEMINI_API_KEY is missing from environment variables."
+        : "OPENROUTER_API_KEY is missing from environment variables."
+    );
   }
 
-  // Gemini 3.8 Flash can stall past 30s even for tiny prompts. Gemini 3.6
-  // Flash is the fastest reliable sibling currently exposed to this project.
-  const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+  // Model selection based on provider
+  let model: string;
+  let fallbackModel: string;
 
-  // If the primary model is overloaded (e.g. 503 UNAVAILABLE), retry once on
-  // a lighter sibling model instead of making the user wait for nothing.
-  const fallbackModel =
-    process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash";
+  if (provider === "openrouter") {
+    // OpenRouter free tier: Kimi K3 is #1 ranked free model
+    // DeepSeek V3 is also excellent and completely free
+    model = process.env.OPENROUTER_MODEL?.trim() || "moonshotai/kimi-k3-central";
+    fallbackModel = process.env.OPENROUTER_FALLBACK_MODEL?.trim() || "deepseek/deepseek-chat";
+  } else {
+    // Gemini models
+    model = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+    fallbackModel = process.env.GEMINI_FALLBACK_MODEL?.trim() || "gemini-3.5-flash";
+  }
 
-  // Abort a stalled Gemini request after this many milliseconds.
-  // 30s keeps the mobile UI responsive when Gemini is unavailable.
+  // Abort a stalled request after this many milliseconds.
+  // 30s keeps the mobile UI responsive when AI is unavailable.
   const requestTimeoutMs =
-    parseStrictPositiveInt(process.env.GEMINI_REQUEST_TIMEOUT_MS) || 30_000;
+    parseStrictPositiveInt(process.env.AI_REQUEST_TIMEOUT_MS) || 30_000;
 
+  // Thinking level for Gemini 3 models only
   const rawThinkingLevel = process.env.GEMINI_THINKING_LEVEL?.trim().toLowerCase();
   const thinkingLevel: AiThinkingLevel = AI_THINKING_LEVELS.includes(
     rawThinkingLevel as AiThinkingLevel
@@ -81,40 +101,43 @@ export const loadAiConfig = (): AiConfig => {
     ? (rawThinkingLevel as AiThinkingLevel)
     : "low";
 
+  // Use provider-specific max output tokens (or openrouter specific)
   const maxOutputTokens =
+    parseStrictPositiveInt(process.env.OPENROUTER_MAX_OUTPUT_TOKENS) ||
     parseStrictPositiveInt(process.env.GEMINI_MAX_OUTPUT_TOKENS) || 1500;
 
+  // Rate limits - use generic env vars or provider-specific ones
   const maxRequestsPerMinute = parseStrictPositiveInt(
+    process.env.AI_MAX_REQUESTS_PER_MINUTE ||
+    process.env.OPENROUTER_MAX_REQUESTS_PER_MINUTE ||
     process.env.GEMINI_MAX_REQUESTS_PER_MINUTE
   );
 
   if (isEnabled && !maxRequestsPerMinute) {
-    errors.push(
-      "GEMINI_MAX_REQUESTS_PER_MINUTE must be a valid number greater than 0."
-    );
+    errors.push("AI_MAX_REQUESTS_PER_MINUTE must be a valid number greater than 0.");
   }
 
   const maxRequestsPerDay = parseStrictPositiveInt(
+    process.env.AI_MAX_REQUESTS_PER_DAY ||
+    process.env.OPENROUTER_MAX_REQUESTS_PER_DAY ||
     process.env.GEMINI_MAX_REQUESTS_PER_DAY
   );
 
   if (isEnabled && !maxRequestsPerDay) {
-    errors.push(
-      "GEMINI_MAX_REQUESTS_PER_DAY must be a valid number greater than 0."
-    );
+    errors.push("AI_MAX_REQUESTS_PER_DAY must be a valid number greater than 0.");
   }
 
   const maxInputTokensPerMinute = parseStrictPositiveInt(
+    process.env.AI_MAX_INPUT_TOKENS_PER_MINUTE ||
+    process.env.OPENROUTER_MAX_INPUT_TOKENS_PER_MINUTE ||
     process.env.GEMINI_MAX_INPUT_TOKENS_PER_MINUTE
   );
 
   if (isEnabled && !maxInputTokensPerMinute) {
-    errors.push(
-      "GEMINI_MAX_INPUT_TOKENS_PER_MINUTE must be a valid number greater than 0."
-    );
+    errors.push("AI_MAX_INPUT_TOKENS_PER_MINUTE must be a valid number greater than 0.");
   }
 
-  //FORGE RESITRICTIONS
+  //FORGE RESTRICTIONS
   const globalDailyRequestCap =
     parseStrictPositiveInt(process.env.AI_GLOBAL_DAILY_REQUEST_CAP) ||
     maxRequestsPerDay ||
@@ -153,6 +176,7 @@ export const loadAiConfig = (): AiConfig => {
 
   return {
     aiEnabled: finalAiEnabled,
+    provider,
     apiKey,
     model,
     fallbackModel,

@@ -2,10 +2,12 @@ import { fromNodeHeaders } from "better-auth/node";
 import { Request, Response } from "express";
 import { auth } from "../lib/auth";
 import { checkUserEntitlement } from "../services/aiUsage/subscriptionService";
+import { loadAiConfig } from "../services/aiUsage/aiUsageConfig";
 import {
   generateUserWorkout,
   saveAiWorkoutDraft,
 } from "../services/aiWorkout/geminiWorkoutService";
+import { generateUserWorkoutOpenrouter } from "../services/ai/openrouterWorkoutService";
 import { GenerateWorkoutRequest } from "../services/aiWorkout/types";
 
 //post request to create workout via AI
@@ -21,6 +23,7 @@ export const generateWorkout = async (req: Request, res: Response) => {
     }
 
     const userId = session.user.id;
+    const config = loadAiConfig();
 
     const {
       mode, //depending on insight drive or custom
@@ -39,7 +42,7 @@ export const generateWorkout = async (req: Request, res: Response) => {
       });
     }
 
-    //workout Request structure to be sent to Google Gemini.
+    //workout Request structure to be sent to AI provider.
     const workoutRequest: GenerateWorkoutRequest = {
       mode,
       targetMuscles,
@@ -51,8 +54,10 @@ export const generateWorkout = async (req: Request, res: Response) => {
       preferredEquipment,
     };
 
-    //Call workout and return workout as a draft. -before user approval
-    const result = await generateUserWorkout(userId, workoutRequest);
+    // Choose the appropriate AI service based on provider configuration
+    const result = config.provider === "openrouter"
+      ? await generateUserWorkoutOpenrouter(userId, workoutRequest)
+      : await generateUserWorkout(userId, workoutRequest);
 
     //check ai clearence error.
     if (!result.success) {

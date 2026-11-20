@@ -19,9 +19,12 @@ import {
   prepareAiExecution,
 } from "../aiUsage/usageManagerservice";
 import { getUserFitnessProfile } from "../fitnessAnalytics/profileService";
+import { getFitnessContext } from "../fitnessAnalytics/fitnessAnalyticsService";
+import { generateFingerPrint } from "../aiCoach/promptBuilder";
+import { getCachedInsight } from "../aiUsage/usageManagerservice";
+import type { AiCoachInsightResponse } from "../aiCoach/types";
 import {
   fetchExercisesCandidates,
-  resolveTargetMuscles,
 } from "./exerciseCandidate";
 import {
   GeneratedWorkoutPlan,
@@ -30,7 +33,8 @@ import {
 } from "./types";
 import {
   buildWorkout,
-  validateGeneratedWorkout,
+  selectSessionPriorities,
+  validateWorkoutAgainstRequirements,
   WORKOUT_RESPONSE_JSON_SCHEMA,
   WORKOUT_SYSTEM_INSTRUCTION,
 } from "./workoutPromptBuilder";
@@ -62,13 +66,31 @@ export const generateUserWorkout = async (
 ): Promise<GenerateWorkoutResult> => {
   const config = loadAiConfig();
 
-  //fetch target muscles.
-  const targetMuscles = await resolveTargetMuscles(userId, request);
+  const fitnessContext = await getFitnessContext(userId);
+  let insight: AiCoachInsightResponse | undefined;
+  let targetMuscles: string[];
+  if (request.mode === "insight_driven") {
+    const cached = await getCachedInsight<AiCoachInsightResponse>(userId, generateFingerPrint(userId, fitnessContext));
+    insight = cached.hit ? cached.data : undefined;
+    if (!insight?.muscleFocus || !Array.isArray(insight.muscleFocus.neglectedMuscles)) {
+      return { success: false, error: "Generate a current Forge Coach insight before requesting an insight-driven workout." };
+    }
+    targetMuscles = selectSessionPriorities(
+      insight.muscleFocus.neglectedMuscles,
+      fitnessContext.trainingGaps.filter((gap) => gap.severity !== "balanced"),
+      request.targetDurationMinutes ?? request.durationMinutes ?? 45
+    );
+  } else {
+    targetMuscles = (request.targetMuscles ?? []).map((muscle) => muscle.trim().toLowerCase()).filter(Boolean);
+  }
+  if (!targetMuscles.length) return { success: false, error: "Choose at least one target muscle or provide a current coaching insight." };
 
   //fetch relavent database exercises.
   const candidates = await fetchExercisesCandidates(
     targetMuscles,
-    request.preferredEquipment
+    request.preferredEquipment,
+    request.excludedExerciseIds,
+    request.excludedExercises
   );
 
   //if no exercises found
@@ -115,6 +137,8 @@ export const generateUserWorkout = async (
       request,
       userGoal: userProfile.goal,
       userExperience: userProfile.experience,
+      insight,
+      fitnessContext,
     });
 
     // Try the primary model first, then the fallback model if the primary is
@@ -124,6 +148,7 @@ export const generateUserWorkout = async (
     );
 
     let response: GenerateContentResponse | undefined;
+    let selectedModel = modelsToTry[0];
     let lastError: unknown;
 
     for (const model of modelsToTry) {
@@ -146,6 +171,7 @@ export const generateUserWorkout = async (
             ...(isGemini3Model(model) ? {} : { temperature: 0.7 }),
           },
         });
+        selectedModel = model;
         break;
       } catch (error) {
         lastError = error;
@@ -176,20 +202,32 @@ export const generateUserWorkout = async (
 
     //convert gemini response to string.
     const rawJsonText = response.text || "{}";
-    const parsedData = JSON.parse(rawJsonText) as GeneratedWorkoutPlan;
+    let parsedData = JSON.parse(rawJsonText) as GeneratedWorkoutPlan;
 
     if (request.scheduledDate) {
       parsedData.scheduledDate = request.scheduledDate;
     }
 
-    //verify and filter out hellucinated exercises.
-    const validatedWorkout = validateGeneratedWorkout(parsedData, candidates);
-
-    if (validatedWorkout.exercises.length < 2) {
-      throw new Error(
-        "AI generation returned insufficient valid exercises from the database allowlist."
-      );
+    let validation = validateWorkoutAgainstRequirements(parsedData, candidates, request.mode === "insight_driven" ? targetMuscles : [], request.targetDurationMinutes ?? request.durationMinutes ?? 45);
+    if (!validation.workout) {
+      console.warn(`[Gemini Workout] validation failed: ${validation.errors.join("; ")}; attempting repair`);
+      const repair = await ai.models.generateContent({
+        model: selectedModel,
+        contents: `${promptText}\n\nREPAIR REQUIRED: The previous workout failed backend validation: ${validation.errors.join("; ")}. Keep valid choices where possible and correct each issue. Respond only with the complete JSON workout.`,
+        config: {
+          systemInstruction: WORKOUT_SYSTEM_INSTRUCTION,
+          responseMimeType: "application/json",
+          responseJsonSchema: WORKOUT_RESPONSE_JSON_SCHEMA as any,
+          maxOutputTokens: config.maxOutputTokens,
+          abortSignal: timeoutController.signal,
+        },
+      });
+      parsedData = JSON.parse(repair.text || "{}") as GeneratedWorkoutPlan;
+      if (request.scheduledDate) parsedData.scheduledDate = request.scheduledDate;
+      validation = validateWorkoutAgainstRequirements(parsedData, candidates, request.mode === "insight_driven" ? targetMuscles : [], request.targetDurationMinutes ?? request.durationMinutes ?? 45);
     }
+    if (!validation.workout) throw new Error(`Workout validation failed after repair: ${validation.errors.join("; ")}`);
+    const validatedWorkout = validation.workout;
 
     //save generated workout as draft.
     const [draftRow] = await db

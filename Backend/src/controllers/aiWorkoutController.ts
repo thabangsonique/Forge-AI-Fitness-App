@@ -34,6 +34,10 @@ export const generateWorkout = async (req: Request, res: Response) => {
       fitnessGoal, //userselection or database
       experienceLevel, //database
       preferredEquipment, //user selection
+      excludedExerciseIds,
+      excludedExercises,
+      exercisePreferences,
+      userDisclosedLimitations,
     } = req.body;
 
     if (!mode || (mode !== "custom" && mode !== "insight_driven")) {
@@ -52,6 +56,10 @@ export const generateWorkout = async (req: Request, res: Response) => {
       fitnessGoal,
       experienceLevel,
       preferredEquipment,
+      excludedExerciseIds,
+      excludedExercises,
+      exercisePreferences,
+      userDisclosedLimitations,
     };
 
     // Choose the appropriate AI service based on provider configuration

@@ -11,11 +11,8 @@ This guide explains how to set up OpenRouter as your AI provider for the Forge A
 - **No credit card required** for signup
 - Access to top-ranked models like Kimi K3 (highest-rated free model)
 
-### Available Free Models:
-1. **Kimi K3 Central** (`moonshotai/kimi-k3-central`) - #1 ranked free model
-2. **DeepSeek V3** (`deepseek/deepseek-chat`) - Excellent reasoning capabilities
-3. **Gemini 2.0 Flash** (`google/gemini-2.0-flash`) - Google's model via OpenRouter
-4. **Llama 3.1** (`meta-llama/llama-3.1-8b-instruct`) - Meta's open model
+### Model selection:
+Use OpenRouter's free-model router (`openrouter/free`) so the app does not pin itself to a model ID that may later be retired. You can configure a specific model ID if you verify it is currently listed in OpenRouter.
 
 ## Step-by-Step Setup
 
@@ -52,9 +49,9 @@ OPENROUTER_API_KEY=sk-or-v1-your-key-here
 ### Step 3: Set Recommended Free Tier Values
 
 ```env
-# Recommended models for free tier
-OPENROUTER_MODEL=moonshotai/kimi-k3-central
-OPENROUTER_FALLBACK_MODEL=deepseek/deepseek-chat
+# Recommended model routing (free tier)
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_FALLBACK_MODEL=openrouter/free
 
 # Free tier limits (20 RPM, 1000 RPD)
 OPENROUTER_MAX_REQUESTS_PER_MINUTE=20

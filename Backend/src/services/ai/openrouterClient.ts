@@ -24,13 +24,12 @@ export const getOpenRouterClient = (apiKey: string): ReturnType<typeof createOpe
 
 // OpenRouter has its own model naming convention.
 // Examples:
-// - moonshotai/kimi-k3-central (top free model)
-// - deepseek/deepseek-chat (DeepSeek V3)
+// - openrouter/free (routes to a currently available free text model)
 // - google/gemini-2.0-flash (Gemini via OpenRouter)
 // - meta-llama/llama-3.1-8b-instruct
 export const OPENROUTER_MODELS = {
-  PRIMARY: "moonshotai/kimi-k3-central",
-  FALLBACK: "deepseek/deepseek-chat",
+  PRIMARY: "openrouter/free",
+  FALLBACK: "openrouter/free",
 } as const;
 
 /**

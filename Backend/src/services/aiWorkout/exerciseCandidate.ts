@@ -2,6 +2,7 @@ import { ilike, or } from "drizzle-orm";
 import { db } from "../../db";
 import { exercises } from "../../db/schema";
 import { getFitnessContext } from "../fitnessAnalytics/fitnessAnalyticsService";
+import { expandMuscleAliases } from "./muscleGroups";
 import { ExerciseCandidates, GenerateWorkoutRequest } from "./types";
 
 const DEFAULT_BEGINNER_MUSCLES = [
@@ -63,13 +64,16 @@ export const resolveTargetMuscles = async (
 
 export const fetchExercisesCandidates = async (
   targetMuscle: string[],
-  preferredEquipment?: string[]
+  preferredEquipment?: string[],
+  excludedExerciseIds: string[] = [],
+  excludedExercises: string[] = []
 ): Promise<ExerciseCandidates[]> => {
   if (targetMuscle.length === 0) {
     return [];
   }
 
-  const muscleConditions = targetMuscle.map((muscle) =>
+  const expandedMuscles = expandMuscleAliases(targetMuscle);
+  const muscleConditions = expandedMuscles.map((muscle) =>
     ilike(exercises.muscle, `${muscle}`)
   );
 
@@ -80,22 +84,59 @@ export const fetchExercisesCandidates = async (
       muscle: exercises.muscle,
       equipment: exercises.equipment,
       difficulty: exercises.difficulty,
+      mechanics: exercises.mechanics,
+      forceType: exercises.forceType,
     })
     .from(exercises)
     .where(or(...muscleConditions))
-    .limit(30);
+    .limit(100);
+
+  const excludedIds = new Set(excludedExerciseIds);
+  const excludedNames = new Set(
+    excludedExercises.map((name) => name.trim().toLowerCase())
+  );
+  const eligibleRows = rows.filter(
+    (row) =>
+      !excludedIds.has(row.id) &&
+      !excludedNames.has(row.name.trim().toLowerCase())
+  );
+
+  //TEMPORARY.
+  console.log(
+    "[OpenRouter Workout] Candidate muscle breakdown:",
+    eligibleRows.reduce<Record<string, string[]>>((acc, candidate) => {
+      const muscle = candidate.muscle.trim().toLowerCase();
+
+      if (!acc[muscle]) {
+        acc[muscle] = [];
+      }
+
+      acc[muscle].push(candidate.name);
+
+      return acc;
+    }, {})
+  );
 
   if (preferredEquipment && preferredEquipment.length > 0) {
-    const equipmentLower = preferredEquipment.map((e) => e.toLowerCase());
-    const filtered = rows.filter((row) =>
+    const normalizeEquipment = (equipment: string) => {
+      const value = equipment.trim().toLowerCase().replace(/[_-]/g, " ");
+      if (["dumbbells", "free weights dumbbell"].includes(value))
+        return "dumbbell";
+      if (["barbells", "free weights barbell"].includes(value))
+        return "barbell";
+      if (["body weight", "calisthenics"].includes(value)) return "bodyweight";
+      if (["cable machine", "cables"].includes(value)) return "cable";
+      if (["resistance band", "resistance bands", "bands"].includes(value))
+        return "band";
+      return value;
+    };
+    const equipmentLower = new Set(preferredEquipment.map(normalizeEquipment));
+    const filtered = eligibleRows.filter((row) =>
       row.equipment
-        ? equipmentLower.includes(row.equipment.toLowerCase())
-        : true
+        ? equipmentLower.has(normalizeEquipment(row.equipment))
+        : equipmentLower.has("bodyweight")
     );
-
-    if (filtered.length >= 6) {
-      return filtered;
-    }
+    return filtered;
   }
-  return rows;
+  return eligibleRows;
 };

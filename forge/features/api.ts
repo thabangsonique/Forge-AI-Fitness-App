@@ -312,20 +312,23 @@ export interface AiGeneratedExercise {
 
 //full generated workout type
 export interface AiGeneratedWorkoutPlan {
-  workoutName: string;
-  workoutCategory: string;
-  durationEstimateMinutes: number;
-  targetMuscles: string[];
+  name: string;
+  category: string;
+  description: string;
   exercises: AiGeneratedExercise[];
-  coachNote: string;
 }
 
 //Type the workout draft.
+
 export interface AiWorkoutDraftResponse {
   success: boolean;
-  draftId: string;
-  workout: AiGeneratedWorkoutPlan;
-  generatedAt: string;
+  source: "openrouter" | "gemini";
+  data: {
+    draftId: string;
+    status: "draft";
+    workout: AiGeneratedWorkoutPlan;
+    createdAt: string;
+  };
 }
 
 //Type for requests to be sent to Gemini.
@@ -664,6 +667,18 @@ export const api = createApi({
 
       invalidatesTags: ["AiCoach"],
     }),
+
+    //workout generation.
+    generateAiWorkout: build.mutation<
+      AiWorkoutDraftResponse,
+      { mode: "custom" | "insight_driven" }
+    >({
+      query: (body) => ({
+        url: "/api/ai/workout/generate",
+        method: "POST",
+        body,
+      }),
+    }),
   }),
 });
 
@@ -684,4 +699,5 @@ export const {
   useGetPersonalRecordsQuery,
   useGenerateCoachInsightMutation,
   useGetCoachInsightsQuery,
+  useGenerateAiWorkoutMutation,
 } = api;

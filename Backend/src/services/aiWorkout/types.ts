@@ -13,6 +13,10 @@ export interface GenerateWorkoutRequest {
   fitnessGoal?: string;
   experienceLevel?: string;
   preferredEquipment?: string[];
+  excludedExerciseIds?: string[];
+  excludedExercises?: string[];
+  exercisePreferences?: string[];
+  userDisclosedLimitations?: string[];
   durationMinutes?: number;
 }
 
@@ -23,6 +27,8 @@ export interface ExerciseCandidates {
   muscle: string;
   equipment: string | null;
   difficulty: string;
+  mechanics?: string | null;
+  forceType?: string | null;
 }
 
 //coming from gemini

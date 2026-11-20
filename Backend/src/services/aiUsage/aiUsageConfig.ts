@@ -78,10 +78,9 @@ export const loadAiConfig = (): AiConfig => {
   let fallbackModel: string;
 
   if (provider === "openrouter") {
-    // OpenRouter free tier: Kimi K3 is #1 ranked free model
-    // DeepSeek V3 is also excellent and completely free
-    model = process.env.OPENROUTER_MODEL?.trim() || "moonshotai/kimi-k3-central";
-    fallbackModel = process.env.OPENROUTER_FALLBACK_MODEL?.trim() || "deepseek/deepseek-chat";
+    // OpenRouter's auto free-model router avoids pinning the app to retired IDs.
+    model = process.env.OPENROUTER_MODEL?.trim() || "openrouter/free";
+    fallbackModel = process.env.OPENROUTER_FALLBACK_MODEL?.trim() || "openrouter/free";
   } else {
     // Gemini models
     model = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
